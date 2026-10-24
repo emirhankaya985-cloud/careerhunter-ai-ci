@@ -1,0 +1,89 @@
+"""Privacy, ranking, persistence and repeatability regression tests."""
+import json
+
+import pytest
+from sqlalchemy import select
+
+from careerhunter.agents.job_matcher import RuleBasedMatcher
+from careerhunter.database import DatabaseRepository, jobs
+from careerhunter.models import Job
+from careerhunter.personal_profile import load_match_profile
+from careerhunter.personal_rescore import rescore_existing
+
+
+def sample():
+    return {
+        "skills": ["Python", "FastAPI", "SQL", "PostgreSQL", "PyTorch"],
+        "target_roles": ["Junior Python Developer", "AI Automation Engineer"],
+        "target_countries": ["Türkiye", "United Kingdom"],
+        "career_stage": "early_career",
+    }
+
+
+def example_job(title="Junior Python Developer", description="Python FastAPI SQL"):
+    return Job(
+        job_id="101", source="greenhouse", company="Example", title=title,
+        location="Remote", description=description,
+        remote_type="remote",
+        job_url="https://boards.greenhouse.io/example/jobs/101",
+        source_url="https://boards-api.greenhouse.io/v1/boards/example/jobs",
+    )
+
+
+def test_private_profile_overrides_public_example(monkeypatch):
+    monkeypatch.setenv("CAREERHUNTER_PROFILE_JSON", json.dumps(sample()))
+    assert load_match_profile()["target_roles"] == sample()["target_roles"]
+    monkeypatch.setenv("CAREERHUNTER_PROFILE_JSON", '{"skills": 10}')
+    with pytest.raises(ValueError, match="list"):
+        load_match_profile()
+
+
+def test_private_profile_fail_closed_in_render(monkeypatch):
+    monkeypatch.delenv("CAREERHUNTER_PROFILE_JSON", raising=False)
+    monkeypatch.setenv("RENDER", "true")
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    with pytest.raises(RuntimeError, match="not configured"):
+        load_match_profile()
+
+
+def test_remote_title_skill_and_experience_priority():
+    m = RuleBasedMatcher(sample(), {
+        "junior": ["junior"], "senior": ["senior", "staff"],
+    })
+    junior = m.score(example_job(description="Python FastAPI SQL. Remote worldwide."))
+    senior = m.score(example_job(
+        title="Senior Python Engineer", description="Python FastAPI SQL 8 years experience"
+    ))
+    assert junior.match_score > senior.match_score
+    assert junior.match_score >= 65
+    assert senior.match_score <= 20
+    assert junior.match_method == "rules"
+
+
+def test_ineligible_remote_never_becomes_high_match():
+    m = RuleBasedMatcher(sample(), {"junior": ["junior"]})
+    result = m.score(example_job(description="Python FastAPI SQL. US only remote."))
+    assert result.eligibility_status == "ineligible"
+    assert result.match_score == 0
+
+
+def test_rescore_preserves_first_seen_and_verification_time(tmp_path, monkeypatch):
+    url = "sqlite:///" + str(tmp_path / "match.db")
+    monkeypatch.setenv("CAREERHUNTER_PROFILE_JSON", json.dumps(sample()))
+    repo = DatabaseRepository(url)
+    job = example_job(description="Python FastAPI SQL. Remote worldwide.")
+    assert repo.upsert_jobs([job]) == 1
+    with repo.engine.connect() as conn:
+        before = conn.execute(select(jobs)).mappings().one()
+        first_seen, verified = before["first_seen_at"], before["last_verified_at"]
+    assert rescore_existing(url) == 1
+    assert rescore_existing(url) == 1
+    with repo.engine.connect() as conn:
+        after = conn.execute(select(jobs)).mappings().one()
+    enriched = Job.model_validate_json(after["payload"])
+    assert enriched.match_score >= 65
+    assert enriched.match_method == "rules"
+    assert after["first_seen_at"] == first_seen
+    assert after["last_verified_at"] == verified
+    assert after["status"] == before["status"]
+    repo.engine.dispose()
