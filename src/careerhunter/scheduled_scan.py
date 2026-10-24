@@ -274,9 +274,36 @@ def nvidia_smoke(request: Request) -> dict[str, object]:
         http_status = exc.response.status_code if isinstance(exc, HTTPStatusError) else None
         logger.warning("NVIDIA smoke failed: %s (HTTP %s)",
                        type(exc).__name__, http_status or "-")
+        # Distinguish an invalid credential from a non-entitled model endpoint:
+        # only return safe status codes and a model-presence boolean.
+        import httpx
+        model_list_status = None
+        model_list_contains_120b = None
+        if getattr(provider, "url", "") == (
+            "https://integrate.api.nvidia.com/v1/chat/completions"
+        ):
+            try:
+                catalog = httpx.get(
+                    "https://integrate.api.nvidia.com/v1/models",
+                    headers={"Authorization": f"Bearer {provider.api_key}"},
+                    timeout=12,
+                )
+                model_list_status = catalog.status_code
+                if catalog.status_code == 200:
+                    data = catalog.json().get("data", [])
+                    model_list_contains_120b = any(
+                        item.get("id") == model for item in data
+                        if isinstance(item, dict)
+                    )
+            except (httpx.HTTPError, ValueError, TypeError, AttributeError):
+                pass
         return {
             "status": "api_failed",
             "model": model,
             "error_type": type(exc).__name__,
             "http_status": http_status,
+            "official_endpoint": getattr(provider, "url", "") ==
+                "https://integrate.api.nvidia.com/v1/chat/completions",
+            "models_http_status": model_list_status,
+            "model_is_listed": model_list_contains_120b,
         }
