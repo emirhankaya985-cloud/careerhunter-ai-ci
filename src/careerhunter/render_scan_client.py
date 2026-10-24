@@ -64,11 +64,15 @@ def wait_ready() -> None:
 def main() -> int:
     wait_ready()  # Wakes a free Render instance before requesting the short-lived OIDC JWT.
     is_rescore = "--rescore" in sys.argv[1:]
-    endpoint = "/internal/rescore" if is_rescore else "/internal/scan"
+    is_ai = "--ai" in sys.argv[1:]
+    if is_rescore and is_ai:
+        raise ValueError("Only one rescore mode is allowed")
+    endpoint = ("/internal/ai-rescore" if is_ai else
+                "/internal/rescore" if is_rescore else "/internal/scan")
     started = call(endpoint, method="POST")
     if started.get("status") != "running":
         raise RuntimeError("Collector did not start: " + str(started.get("status")))
-    if is_rescore and started.get("mode") != "rescore":
+    if (is_rescore or is_ai) and started.get("mode") != ("ai" if is_ai else "rescore"):
         raise RuntimeError("Another production task is running; retry rescore later")
     print("Authenticated Render task accepted")
 
@@ -81,13 +85,14 @@ def main() -> int:
             print("Collector state:", status)
             last_status = status
         if status == "success":
-            if is_rescore and state.get("mode") != "rescore":
+            if (is_rescore or is_ai) and state.get("mode") != ("ai" if is_ai else "rescore"):
                 raise RuntimeError("Rescore task was replaced by another task")
             processed = int(state.get("jobs_processed", 0))
             added = int(state.get("jobs_new", 0))
             if processed <= 0:
                 raise RuntimeError("Production collector returned zero jobs")
-            summary = (f"Rescored {processed} stored jobs" if is_rescore
+            summary = (f"NVIDIA-enriched {processed} historical jobs" if is_ai
+                       else f"Rescored {processed} stored jobs" if is_rescore
                        else f"Collected {processed} job rows; {added} newly stored.")
             print("PASS:", summary)
             print("Partial ATS source failures:", bool(state.get("sources_partial")))
