@@ -2,6 +2,13 @@ name: Personalized CareerHunter Re-ranking
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Rules for all history or NVIDIA AI for top 8"
+        required: true
+        type: choice
+        default: rules
+        options: [rules, ai]
   push:
     paths:
       - .github/workflows/personalize.yml
@@ -24,4 +31,11 @@ jobs:
         with:
           python-version: '3.11'
       - name: Backfill private personal match scores in Render
-        run: python src/careerhunter/render_scan_client.py --rescore
+        env:
+          SCAN_MODE: ${{ inputs.mode }}
+        run: |
+          if [ "$SCAN_MODE" = "ai" ]; then
+            python src/careerhunter/render_scan_client.py --ai
+          else
+            python src/careerhunter/render_scan_client.py --rescore
+          fi
