@@ -25,6 +25,7 @@ REPO = "emirhankaya985-cloud/careerhunter-ai-ci"
 REPO_ID = "1431811304"
 WORKFLOW = REPO + "/.github/workflows/daily.yml@refs/heads/main"
 RESCORE_WORKFLOW = REPO + "/.github/workflows/personalize.yml@refs/heads/main"
+SMOKE_WORKFLOW = REPO + "/.github/workflows/nvidia-smoke.yml@refs/heads/main"
 JWK_URL = ISSUER + "/.well-known/jwks"
 _jwks = PyJWKClient(JWK_URL, cache_jwk_set=True, lifespan=3600, timeout=10)
 _lock = threading.Lock()
@@ -232,3 +233,50 @@ def start_ai_rescore(request: Request) -> dict[str, object]:
         threading.Thread(target=_enrich_historical_with_nvidia,
                          name="careerhunter-nvidia", daemon=True).start()
         return dict(_state)
+
+
+@router.post("/internal/nvidia-smoke")
+def nvidia_smoke(request: Request) -> dict[str, object]:
+    """One synthetic free-trial inference, authorized only by signed GitHub OIDC.
+
+    Never return or log a credential or a private real-world candidate profile.
+    Keep this probe separate from stored job data or recurring daily scraping.
+    """
+    _require_github_oidc(request, workflow=SMOKE_WORKFLOW)
+    from .llm.provider import create_provider, configured_provider
+
+    provider_mode = configured_provider()
+    provider = create_provider()
+    if provider_mode != "nvidia" or provider is None:
+        return {"status": "missing_key", "model": os.getenv("LLM_MODEL", "")}
+    model = getattr(provider, "model", "")
+    if model != "nvidia/nemotron-3-super-120b-a12b":
+        return {"status": "wrong_model", "model": model}
+    try:
+        result = provider.analyze_job(
+            {"skills": ["Python", "FastAPI"],
+             "target_roles": ["Junior Python Developer"],
+             "experience": ["student", "junior"]},
+            "title=Junior Python Developer\\nlocation=Remote from Turkey\\n"
+            "description=Python FastAPI internship-friendly role, globally remote."
+        )
+        return {
+            "status": "success",
+            "model": model,
+            "valid_json": True,
+            "score": result.total,
+            "note": "synthetic_only",
+        }
+    except Exception as exc:
+        from httpx import HTTPStatusError
+        # NVIDIA may return 401 (invalid key), 429 (rate limit), or 422 (params).
+        # Surface only the safe status code and Python exception class.
+        http_status = exc.response.status_code if isinstance(exc, HTTPStatusError) else None
+        logger.warning("NVIDIA smoke failed: %s (HTTP %s)",
+                       type(exc).__name__, http_status or "-")
+        return {
+            "status": "api_failed",
+            "model": model,
+            "error_type": type(exc).__name__,
+            "http_status": http_status,
+        }
