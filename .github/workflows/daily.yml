@@ -102,8 +102,8 @@ jobs:
         with:
           name: careerhunter-report-${{ github.run_id }}
           path: |
-          reports/daily-run.json
-          reports/ntfy-acceptance.json
+            reports/daily-run.json
+            reports/ntfy-acceptance.json
           if-no-files-found: error
           retention-days: 14
 
