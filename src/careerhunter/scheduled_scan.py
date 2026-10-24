@@ -58,7 +58,6 @@ def _require_github_oidc(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Invalid identity") from None
 
     expected = {
-        "sub": "repo:" + REPO + ":ref:refs/heads/main",
         "repository": REPO,
         "repository_id": REPO_ID,
         "workflow_ref": WORKFLOW,
@@ -66,6 +65,11 @@ def _require_github_oidc(request: Request) -> None:
     }
     mismatched = [name for name, value in expected.items()
                   if str(claims.get(name)) != value]
+    # New GitHub OIDC subject templates can include immutable IDs instead of
+    # repo names. Bind access to the verified repository_id, exact workflow and
+    # ref claims above; still require a non-empty, signed subject.
+    if not isinstance(claims.get("sub"), str) or not claims["sub"]:
+        mismatched.append("sub")
     if mismatched:
         logger.warning("GitHub OIDC claim mismatch fields: %s", ",".join(mismatched))
         raise HTTPException(status_code=403, detail="Workflow not authorized")
