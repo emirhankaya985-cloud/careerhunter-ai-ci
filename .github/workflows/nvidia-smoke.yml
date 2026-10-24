@@ -1,0 +1,54 @@
+name: NVIDIA 120B Connection Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/nvidia-smoke.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: careerhunter-nvidia-smoke
+  cancel-in-progress: false
+
+jobs:
+  check_nvidia:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify single synthetic NVIDIA Super 120B response on Render
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+          import time
+          sys.path.insert(0, "src")
+          from careerhunter.render_scan_client import wait_ready, call
+
+          wait_ready()
+          for attempt in range(8):
+              try:
+                  response = call("/internal/nvidia-smoke", method="POST")
+                  break
+              except RuntimeError as exc:
+                  if "HTTP 404" not in str(exc) or attempt == 7:
+                      raise
+                  time.sleep(20)
+          # Output contains only model ID, boolean validation and status; never credentials.
+          print("NVIDIA smoke status:", response["status"])
+          print("Selected model:", response.get("model", "unset"))
+          print("Synthetic JSON validated:", response.get("valid_json", False))
+          if response["status"] != "success":
+              print("Safe error category:", response.get("error_type", response["status"]))
+              print("NVIDIA HTTP code:", response.get("http_status"))
+              raise SystemExit("FAIL: NVIDIA 120B inference not verified")
+          print("PASS: NVIDIA 120B one-call synthetic inference")
+          PY
