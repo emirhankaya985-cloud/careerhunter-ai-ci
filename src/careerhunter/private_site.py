@@ -7,6 +7,7 @@ DASHBOARD_PASSWORD and DASHBOARD_SESSION_SECRET. No default credentials exist.
 from __future__ import annotations
 
 import hmac
+import html
 import hashlib
 import logging
 import os
@@ -313,6 +314,47 @@ def logout(request: Request):
     response = RedirectResponse("/login", status_code=303)
     response.delete_cookie(_cookie_name(_settings()[3]), path="/")
     return response
+
+
+@app.get("/telegram/setup", response_class=HTMLResponse)
+def telegram_setup(request: Request):
+    """Owner-only Chat ID setup page; never shows or stores a bot token."""
+    if not _authenticated(request):
+        return RedirectResponse("/login", status_code=303)
+    from .notifications.telegram import recent_private_start_chats
+
+    has_token = bool(os.getenv("TELEGRAM_BOT_TOKEN", "").strip())
+    items = recent_private_start_chats() if has_token else []
+    if not has_token:
+        body = ("<p>1. Render Environment alanına TELEGRAM_BOT_TOKEN ekle.</p>"
+                "<p>2. Telegram botuna /start yaz ve bu sayfayı yenile.</p>")
+    elif not items:
+        body = ("<p>Botuna Telegram uygulamasında /start yaz.</p>"
+                "<p>Ardından bu sayfayı yenile. Telegram, bekleyen /start "
+                "mesajlarını 24 saat kadar saklar.</p>")
+    else:
+        rows = "".join(
+            "<li><strong>" + html.escape(display) + "</strong>: "
+            "<code>" + str(chat_id) + "</code></li>"
+            for chat_id, display in items
+        )
+        body = (
+            "<p>Botu başlattığın sohbeti seç. Aşağıdaki ID'yi kopyala ve Render "
+            "Environment içinde <code>TELEGRAM_CHAT_ID</code> olarak kaydet:</p>"
+            "<ul>" + rows + "</ul>"
+        )
+    content = (
+        "<!doctype html><html lang='tr'><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "<title>CareerHunter Telegram kurulumu</title>"
+        "<style>body{font:16px system-ui;max-width:620px;margin:50px auto;"
+        "padding:0 20px;background:#111827;color:#f9fafb;line-height:1.7}"
+        "code{background:#374151;padding:4px 7px;border-radius:6px}"
+        "a{color:#93c5fd}</style>"
+        "<h1>📲 CareerHunter Telegram bağlantısı</h1>"
+        + body + "<p><a href='/'>← Kariyer paneline dön</a></p></html>"
+    )
+    return HTMLResponse(content)
 
 
 @app.get("/", response_class=HTMLResponse)
