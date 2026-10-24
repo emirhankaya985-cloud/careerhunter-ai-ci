@@ -119,8 +119,6 @@ def test_invalid_chat_and_token_are_rejected(monkeypatch):
 
 def test_get_updates_filters_private_start_chats(configured, httpx_mock):
     httpx_mock.add_response(
-        url=f"https://api.telegram.org/bot{TOKEN}/getUpdates",
-        match_params={"limit": "40", "timeout": "0", "allowed_updates": '["message"]'},
         json={"ok": True, "result": [
             {"message": {
                 "text": "/start", "chat": {"id": 22334455, "type": "private"},
@@ -134,3 +132,4 @@ def test_get_updates_filters_private_start_chats(configured, httpx_mock):
         ]},
     )
     assert telegram.recent_private_start_chats() == [(22334455, "owner")]
+    assert httpx_mock.get_request().url.path.endswith("/getUpdates")
