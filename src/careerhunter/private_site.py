@@ -209,6 +209,10 @@ app = FastAPI(title="CareerHunter Private Dashboard", docs_url=None,
               redoc_url=None, openapi_url=None, lifespan=lifespan)
 
 
+from .scheduled_scan import router as scan_router
+app.include_router(scan_router)
+
+
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
