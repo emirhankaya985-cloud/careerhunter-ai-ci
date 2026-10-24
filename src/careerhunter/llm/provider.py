@@ -115,6 +115,11 @@ class OpenAICompatibleProvider:
         if response.status_code == 429:
             self._rate_limited = True
             raise LLMBudgetExceeded("Provider quota/rate limit reached")
+        if self.nvidia and response.status_code in {401, 403, 404, 410}:
+            # Trial access may lack Public API Endpoints entitlement. Avoid
+            # repeating rejected calls for every posting in the same scan.
+            self._rate_limited = True
+            raise LLMBudgetExceeded("NVIDIA hosted inference unavailable; rule-based matching remains active")
         response.raise_for_status()
         payload = response.json()
         usage = payload.get("usage") or {}
