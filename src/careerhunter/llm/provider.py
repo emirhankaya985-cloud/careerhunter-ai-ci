@@ -97,7 +97,7 @@ class OpenAICompatibleProvider:
             f"JOB={untrusted_content(job_text)}"
         )
         request_data = {
-            "model": self.model, "temperature": 0,
+            "model": self.model, "temperature": 1.0 if self.nvidia else 0,
             "response_format": {"type": "json_object"},
             "max_tokens": self.max_tokens,
             "messages": [{"role": "user", "content": prompt}],
