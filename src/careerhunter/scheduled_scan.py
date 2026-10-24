@@ -24,6 +24,7 @@ AUDIENCE = "careerhunter-ai-render-collector"
 REPO = "emirhankaya985-cloud/careerhunter-ai-ci"
 REPO_ID = "1431811304"
 WORKFLOW = REPO + "/.github/workflows/daily.yml@refs/heads/main"
+RESCORE_WORKFLOW = REPO + "/.github/workflows/personalize.yml@refs/heads/main"
 JWK_URL = ISSUER + "/.well-known/jwks"
 _jwks = PyJWKClient(JWK_URL, cache_jwk_set=True, lifespan=3600, timeout=10)
 _lock = threading.Lock()
@@ -32,7 +33,7 @@ _state: dict[str, object] = {"status": "idle"}
 router = APIRouter()
 
 
-def _require_github_oidc(request: Request) -> None:
+def _require_github_oidc(request: Request, *, workflow: str = WORKFLOW) -> None:
     """Verify the signature AND immutable repository/workflow identity."""
     if os.getenv("CAREERHUNTER_OIDC_COLLECTOR") != "true":
         raise HTTPException(status_code=404, detail="Not found")
@@ -60,7 +61,7 @@ def _require_github_oidc(request: Request) -> None:
     expected = {
         "repository": REPO,
         "repository_id": REPO_ID,
-        "workflow_ref": WORKFLOW,
+        "workflow_ref": workflow,
         "ref": "refs/heads/main",
     }
     mismatched = [name for name, value in expected.items()
@@ -168,7 +169,7 @@ def _rescore() -> None:
 
 @router.post("/internal/rescore")
 def start_rescore(request: Request) -> dict[str, object]:
-    _require_github_oidc(request)
+    _require_github_oidc(request, workflow=RESCORE_WORKFLOW)
     with _lock:
         if _state.get("status") == "running":
             return dict(_state)
