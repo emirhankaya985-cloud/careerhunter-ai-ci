@@ -166,3 +166,19 @@ def test_nvidia_sends_nonreasoning_json_and_stops_after_rate_limit(httpx_mock):
     with pytest.raises(LLMBudgetExceeded):
         limited.analyze_job({}, "test")
     assert len(httpx_mock.get_requests()) == sent_before
+
+
+def test_nvidia_404_denial_stops_repeating_calls_without_paid_fallback(httpx_mock):
+    provider = OpenAICompatibleProvider(
+        "https://integrate.api.nvidia.com/v1", "test-secret",
+        "nvidia/nemotron-3-super-120b-a12b",
+        Budget(max_calls=8, max_cost_usd=0), nvidia=True,
+    )
+    httpx_mock.add_response(url=provider.url, status_code=404)
+    with pytest.raises(LLMBudgetExceeded, match="hosted inference unavailable"):
+        provider.analyze_job({"skills": ["Python"]}, "junior Python job")
+    assert len(httpx_mock.get_requests()) == 1
+    with pytest.raises(LLMBudgetExceeded):
+        provider.analyze_job({"skills": ["Python"]}, "other job")
+    assert len(httpx_mock.get_requests()) == 1
+    assert provider.budget.cost_usd == 0
