@@ -72,8 +72,8 @@ def test_github_signature_identity_and_workflow_are_all_required(client, monkeyp
         identity = claims()
 
     called = []
-    monkeypatch.setattr(scan.threading, "Thread",
-                        lambda **kwargs: SimpleNamespace(start=lambda: called.append(1)))
+    monkeypatch.setattr(scan, "threading", SimpleNamespace(
+        Thread=lambda **kwargs: SimpleNamespace(start=lambda: called.append(1))))
     first = client.post("/internal/scan", headers=headers)
     second = client.post("/internal/scan", headers=headers)
     assert first.status_code == 200 and first.json()["status"] == "running"
