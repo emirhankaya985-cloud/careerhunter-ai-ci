@@ -143,3 +143,40 @@ def test_nvidia_probe_is_exact_oidc_protected_and_uses_synthetic_data(client, mo
     assert result.json()["model"] == "nvidia/nemotron-3.5-super-vl-120b-a12b"
     assert seen[0][0]["target_roles"] == ["Junior Python Developer"]
     assert "example.com" not in seen[0][1]
+
+
+def test_telegram_test_message_is_only_triggered_by_signed_smoke_workflow(client, monkeypatch):
+    from careerhunter.notifications import telegram
+    monkeypatch.setenv("CAREERHUNTER_OIDC_COLLECTOR", "true")
+    monkeypatch.setattr(scan._jwks, "get_signing_key_from_jwt",
+                        lambda token: SimpleNamespace(key="public-fixture"))
+    identity = claims()
+    monkeypatch.setattr(scan.jwt, "decode", lambda *args, **kwargs: dict(identity))
+    headers = {"Authorization": "Bearer head.payload.signature"}
+    assert client.post("/internal/telegram-smoke").status_code == 401
+    assert client.post("/internal/telegram-smoke", headers=headers).status_code == 403
+    identity["workflow_ref"] = scan.TELEGRAM_SMOKE_WORKFLOW
+    identity["event_name"] = "workflow_dispatch"
+    monkeypatch.setattr(telegram, "is_configured", lambda: True)
+    called = []
+    monkeypatch.setattr(telegram, "publish_connection_test", lambda: called.append(1) or True)
+    result = client.post("/internal/telegram-smoke", headers=headers)
+    assert result.status_code == 200 and result.json() == {"status": "accepted"}
+    assert called == [1]
+
+
+def test_owner_only_telegram_chat_id_setup_page(client, monkeypatch):
+    from careerhunter import private_site as site
+    from careerhunter.notifications import telegram
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "12345678:" + "a" * 35)
+    monkeypatch.setattr(telegram, "recent_private_start_chats",
+                        lambda: [(11223344, "<unsafe>")])
+    monkeypatch.setattr(site, "_authenticated", lambda request: False)
+    anon = client.get("/telegram/setup", follow_redirects=False)
+    assert anon.status_code == 303 and anon.headers["location"] == "/login"
+    monkeypatch.setattr(site, "_authenticated", lambda request: True)
+    page = client.get("/telegram/setup")
+    assert page.status_code == 200
+    assert "11223344" in page.text and "&lt;unsafe&gt;" in page.text
+    assert "<unsafe>" not in page.text
+    assert "12345678:" not in page.text
