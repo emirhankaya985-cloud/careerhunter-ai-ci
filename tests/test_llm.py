@@ -119,7 +119,7 @@ def test_nvidia_uses_super_and_ultra_failover(monkeypatch):
     monkeypatch.delenv("LLM_BASE_URL", raising=False)
     provider = create_provider()
     assert isinstance(provider, FailoverProvider)
-    assert provider.primary.model == "nvidia/nemotron-3.5-lightning-30b-a3b"
+    assert provider.primary.model == "nvidia/nemotron-3-super-120b-a12b"
     assert provider.secondary.model == "nvidia/nemotron-3-ultra-550b-a55b"
 
 
@@ -133,14 +133,14 @@ def test_nvidia_public_key_enables_trial_model_without_fallback(monkeypatch):
     provider = create_provider()
     assert isinstance(provider, OpenAICompatibleProvider)
     assert provider.nvidia
-    assert provider.model == "nvidia/nemotron-3.5-lightning-30b-a3b"
+    assert provider.model == "nvidia/nemotron-3-super-120b-a12b"
     assert provider.api_key == "test-build-key"
     assert provider.url == "https://integrate.api.nvidia.com/v1/chat/completions"
 
 
 def test_nvidia_sends_nonreasoning_json_and_stops_after_rate_limit(httpx_mock):
     provider = OpenAICompatibleProvider(
-        "https://integrate.api.nvidia.com/v1", "dummy", "nvidia/nemotron-3.5-lightning-30b-a3b",
+        "https://integrate.api.nvidia.com/v1", "dummy", "nvidia/nemotron-3-super-120b-a12b",
         Budget(max_calls=3), nvidia=True
     )
     httpx_mock.add_response(
@@ -156,7 +156,7 @@ def test_nvidia_sends_nonreasoning_json_and_stops_after_rate_limit(httpx_mock):
     assert provider.budget.calls == 1
 
     limited = OpenAICompatibleProvider(
-        "https://integrate.api.nvidia.com/v1", "dummy", "nvidia/nemotron-3.5-lightning-30b-a3b",
+        "https://integrate.api.nvidia.com/v1", "dummy", "nvidia/nemotron-3-super-120b-a12b",
         Budget(max_calls=3), nvidia=True
     )
     httpx_mock.add_response(url=limited.url, status_code=429)
