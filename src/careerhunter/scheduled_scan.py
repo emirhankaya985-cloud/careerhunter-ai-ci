@@ -250,7 +250,7 @@ def nvidia_smoke(request: Request) -> dict[str, object]:
     if provider_mode != "nvidia" or provider is None:
         return {"status": "missing_key", "model": os.getenv("LLM_MODEL", "")}
     model = getattr(provider, "model", "")
-    if model != "nvidia/nemotron-3-super-120b-a12b":
+    if model != "nvidia/nemotron-3.5-super-vl-120b-a12b":
         return {"status": "wrong_model", "model": model}
     try:
         result = provider.analyze_job(
