@@ -109,10 +109,15 @@ def test_job_collection_refuses_success_when_all_sources_fail(tmp_path, monkeypa
     assert repo.list_jobs(active_only=False) == []
 
 
-def test_daily_workflow_guards_production_and_preserves_failure_artifacts():
-    content = (Path(__file__).parents[1] / ".github/workflows/daily.yml").read_text()
-    assert "DATABASE_URL missing: refusing temporary SQLite success" in content
-    assert "steps.database.outcome == 'success'" in content
-    assert "if: always()" in content
-    assert "careerhunter.reporting.ops_summary --notify" in content
-    assert "if-no-files-found: error" in content
+
+def test_daily_workflow_runs_in_render_and_rejects_unauthenticated_requests():
+    daily = (Path(__file__).parents[1] / ".github/workflows/daily.yml").read_text()
+    runner = (Path(__file__).parents[1] /
+              "src/careerhunter/render_scan_client.py").read_text()
+    assert "id-token: write" in daily
+    assert "DATABASE_URL" not in daily
+    assert "ACTIONS_ID_TOKEN_REQUEST_TOKEN" in runner
+    assert '"/internal/scan/status"' in runner
+    assert '"/readyz"' in runner
+    assert "Production collector returned zero jobs" in runner
+    assert "sys.exit(1)" in runner
