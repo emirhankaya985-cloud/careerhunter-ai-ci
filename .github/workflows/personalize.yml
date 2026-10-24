@@ -1,6 +1,9 @@
 name: Personalized CareerHunter Re-ranking
 
 on:
+  push:
+    paths:
+      - .github/workflows/personalize.yml
   workflow_dispatch:
     inputs:
       mode:
@@ -29,7 +32,7 @@ jobs:
           python-version: '3.11'
       - name: Backfill private personal match scores in Render
         env:
-          SCAN_MODE: ${{ inputs.mode }}
+          SCAN_MODE: ${{ github.event_name == 'push' && 'ai' || inputs.mode }}
         run: |
           if [ "$SCAN_MODE" = "ai" ]; then
             python src/careerhunter/render_scan_client.py --ai
