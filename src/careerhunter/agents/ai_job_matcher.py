@@ -10,7 +10,7 @@ class AIJobMatcher:
         self.profile = profile
 
     def enrich(self, job: Job) -> Job:
-        """Enrich only pre-filtered jobs; safe failure keeps the rule-based result."""
+        """Optional generative AI second pass; never fabricate eligibility."""
         try:
             result = self.provider.analyze_job(
                 self.profile,
@@ -18,13 +18,20 @@ class AIJobMatcher:
             )
         except Exception:
             return job
-        job.match_score = result.total
-        job.turkey_eligibility = result.turkey_eligibility
-        job.eligibility_status = (
-            "eligible" if result.turkey_eligibility == "verified"
-            else "ineligible" if result.turkey_eligibility == "ineligible"
-            else "needs_review"
-        )
-        job.score_reasons = result.reasons
-        job.gaps = result.gaps
+        score = result.total
+        # A model must not override verified geographical restrictions.
+        if job.turkey_eligibility == "ineligible":
+            score = min(score, 30)
+        if job.experience_level == "senior":
+            score = min(score, 35)
+        job.match_score = max(0, min(100, score))
+        # Eligibility can only be improved by the explicit evidence-based pass.
+        if result.turkey_eligibility == "ineligible":
+            job.turkey_eligibility = "ineligible"
+            job.eligibility_status = "ineligible"
+        job.score_reasons = result.reasons[:8] + [
+            "AI değerlendirmesi; çalışma izni ayrıca doğrulanmalıdır."
+        ]
+        job.gaps = result.gaps[:8]
+        job.match_method = "llm"
         return job
