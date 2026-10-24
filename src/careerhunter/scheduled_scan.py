@@ -26,6 +26,7 @@ REPO_ID = "1431811304"
 WORKFLOW = REPO + "/.github/workflows/daily.yml@refs/heads/main"
 RESCORE_WORKFLOW = REPO + "/.github/workflows/personalize.yml@refs/heads/main"
 SMOKE_WORKFLOW = REPO + "/.github/workflows/nvidia-smoke.yml@refs/heads/main"
+TELEGRAM_SMOKE_WORKFLOW = REPO + "/.github/workflows/telegram-smoke.yml@refs/heads/main"
 JWK_URL = ISSUER + "/.well-known/jwks"
 _jwks = PyJWKClient(JWK_URL, cache_jwk_set=True, lifespan=3600, timeout=10)
 _lock = threading.Lock()
@@ -307,3 +308,13 @@ def nvidia_smoke(request: Request) -> dict[str, object]:
             "models_http_status": model_list_status,
             "model_is_listed": model_list_contains_120b,
         }
+
+
+@router.post("/internal/telegram-smoke")
+def telegram_smoke(request: Request) -> dict[str, object]:
+    """Send one owner-requested Telegram ping using a protected workflow."""
+    _require_github_oidc(request, workflow=TELEGRAM_SMOKE_WORKFLOW)
+    from .notifications.telegram import is_configured, publish_connection_test
+    if not is_configured():
+        return {"status": "not_configured"}
+    return {"status": "accepted" if publish_connection_test() else "send_failed"}
