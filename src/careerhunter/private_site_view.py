@@ -20,7 +20,7 @@ def safe_external_href(value: object) -> str:
                 or url.password is not None):
             return "#"
         # Reject whitespace and control characters to avoid browser URL ambiguity.
-        if any(ord(c) <= 32 or ord(c) == 127 for c in candidate):
+        if "\\" in candidate or any(ord(c) <= 32 or ord(c) == 127 for c in candidate):
             return "#"
     except ValueError:
         return "#"
