@@ -92,3 +92,23 @@ def test_invalid_signed_token_never_reaches_collector(client, monkeypatch):
     response = client.post("/internal/scan", headers={
         "Authorization": "Bearer head.payload.signature"})
     assert response.status_code == 401
+
+
+def test_nvidia_enrichment_requires_exact_backfill_workflow(client, monkeypatch):
+    monkeypatch.setenv("CAREERHUNTER_OIDC_COLLECTOR", "true")
+    monkeypatch.setattr(scan._jwks, "get_signing_key_from_jwt",
+                        lambda token: SimpleNamespace(key="fixture-public-key"))
+    identity = claims()
+    monkeypatch.setattr(scan.jwt, "decode", lambda *args, **kwargs: dict(identity))
+    headers = {"Authorization": "Bearer head.payload.signature"}
+    assert client.post("/internal/ai-rescore", headers=headers).status_code == 403
+    assert client.post("/internal/ai-rescore").status_code == 401
+    identity["workflow_ref"] = scan.RESCORE_WORKFLOW
+    identity["event_name"] = "workflow_dispatch"
+    started = []
+    monkeypatch.setattr(scan, "threading", SimpleNamespace(
+        Thread=lambda **kwargs: SimpleNamespace(start=lambda: started.append(1))))
+    result = client.post("/internal/ai-rescore", headers=headers)
+    assert result.status_code == 200
+    assert result.json()["mode"] == "ai"
+    assert len(started) == 1
