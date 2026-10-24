@@ -64,7 +64,10 @@ def _require_github_oidc(request: Request) -> None:
         "workflow_ref": WORKFLOW,
         "ref": "refs/heads/main",
     }
-    if any(str(claims.get(name)) != value for name, value in expected.items()):
+    mismatched = [name for name, value in expected.items()
+                  if str(claims.get(name)) != value]
+    if mismatched:
+        logger.warning("GitHub OIDC claim mismatch fields: %s", ",".join(mismatched))
         raise HTTPException(status_code=403, detail="Workflow not authorized")
     if claims.get("event_name") not in {"schedule", "workflow_dispatch", "push"}:
         raise HTTPException(status_code=403, detail="Event not authorized")
