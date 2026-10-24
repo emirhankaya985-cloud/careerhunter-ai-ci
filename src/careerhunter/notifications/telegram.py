@@ -32,6 +32,46 @@ def is_configured() -> bool:
     return bool(_TOKEN_RE.fullmatch(token) and _CHAT_RE.fullmatch(chat))
 
 
+def recent_private_start_chats() -> list[tuple[int, str]]:
+    """Look up /start from the owner-only dashboard; never print the bot token.
+
+    Telegram retains unconsumed updates for up to 24 hours. No webhook or
+    public callback is required; the owner chooses which chat ID to configure.
+    """
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    if not _TOKEN_RE.fullmatch(token):
+        return []
+    try:
+        response = httpx.get(
+            f"https://api.telegram.org/bot{token}/getUpdates",
+            params={"limit": 40, "timeout": 0, "allowed_updates": '["message"]'},
+            timeout=12,
+        )
+        if response.status_code != 200:
+            logger.warning("Telegram chat discovery rejected: HTTP %s", response.status_code)
+            return []
+        data = response.json()
+        if data.get("ok") is not True:
+            return []
+        unique: dict[int, str] = {}
+        for event in data.get("result", []):
+            message = event.get("message")
+            if not isinstance(message, dict):
+                continue
+            chat = message.get("chat") or {}
+            sender = message.get("from") or {}
+            chat_id = chat.get("id")
+            if (chat.get("type") != "private" or sender.get("is_bot")
+                    or not isinstance(chat_id, int) or not _CHAT_RE.fullmatch(str(chat_id))
+                    or not str(message.get("text", "")).startswith("/start")):
+                continue
+            unique[chat_id] = str(sender.get("username") or sender.get("first_name") or "Telegram")
+        return list(unique.items())[-10:]
+    except (httpx.HTTPError, ValueError, TypeError, AttributeError):
+        logger.warning("Telegram chat discovery temporarily unavailable")
+        return []
+
+
 def _send(text: str, buttons: list[dict] | None = None, *, silent: bool = False) -> bool:
     if not is_configured():
         return False
