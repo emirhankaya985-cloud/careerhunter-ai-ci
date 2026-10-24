@@ -87,3 +87,38 @@ def test_rescore_preserves_first_seen_and_verification_time(tmp_path, monkeypatc
     assert after["last_verified_at"] == verified
     assert after["status"] == before["status"]
     repo.engine.dispose()
+
+
+def test_historical_ai_pass_only_enriches_selected_jobs(tmp_path, monkeypatch):
+    from careerhunter.llm.provider import JobAnalysis
+    from careerhunter.personal_rescore import enrich_best_existing
+
+    url = "sqlite:///" + str(tmp_path / "ai.db")
+    monkeypatch.setenv("CAREERHUNTER_PROFILE_JSON", json.dumps(sample()))
+    monkeypatch.setenv("LLM_PROVIDER", "nvidia")
+    monkeypatch.setenv("NVIDIA_API_KEY", "fake-test-api-key")
+    monkeypatch.setenv("MAX_DAILY_LLM_CALLS", "1")
+    repo = DatabaseRepository(url)
+    job = example_job(description="Python FastAPI SQL. Remote worldwide.")
+    job = RuleBasedMatcher(sample(), {"junior": ["junior"]}).score(job)
+    assert repo.upsert_jobs([job]) == 1
+
+    class FakeNvidia:
+        def analyze_job(self, profile, text):
+            assert "Python" in profile["skills"]
+            assert "Python" in text
+            return JobAnalysis(
+                technical_fit=30, experience_fit=20, career_fit=17,
+                remote_fit=8, freshness=10, turkey_eligibility="unknown",
+                reasons=["Technical match"], gaps=[]
+            )
+
+    monkeypatch.setattr("careerhunter.llm.provider.create_provider", lambda: FakeNvidia())
+    assert enrich_best_existing(url, limit=20) == 1
+    saved = repo.list_jobs()[0]
+    assert saved.match_method == "llm"
+    assert saved.match_score == 85
+    # Never re-call a free model for an already LLM-enriched job.
+    with pytest.raises(RuntimeError, match="no valid AI analyses"):
+        enrich_best_existing(url, limit=20)
+    repo.engine.dispose()
