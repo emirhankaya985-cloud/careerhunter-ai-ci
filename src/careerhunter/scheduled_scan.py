@@ -134,3 +134,49 @@ def scan_status(request: Request) -> dict[str, object]:
     _require_github_oidc(request)
     with _lock:
         return dict(_state)
+
+
+def _rescore() -> None:
+    """Backfill score JSON using the Render-private profile and database."""
+    try:
+        from .private_site import _settings
+        from .personal_rescore import rescore_existing
+
+        url = _settings()[2]
+        if not url.startswith("postgresql+psycopg://"):
+            raise RuntimeError("Production rescore requires PostgreSQL")
+        processed = rescore_existing(url)
+        with _lock:
+            _state.clear()
+            _state.update({
+                "status": "success" if processed > 0 else "empty",
+                "mode": "rescore",
+                "jobs_processed": processed,
+                "jobs_new": 0,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+            })
+    except Exception as exc:
+        logger.error("Personal backfill failed: %s", type(exc).__name__)
+        with _lock:
+            _state.clear()
+            _state.update({
+                "status": "failed", "mode": "rescore",
+                "error_type": type(exc).__name__,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+            })
+
+
+@router.post("/internal/rescore")
+def start_rescore(request: Request) -> dict[str, object]:
+    _require_github_oidc(request)
+    with _lock:
+        if _state.get("status") == "running":
+            return dict(_state)
+        _state.clear()
+        _state.update({
+            "status": "running",
+            "mode": "rescore",
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        })
+        threading.Thread(target=_rescore, name="careerhunter-rescore", daemon=True).start()
+        return dict(_state)
