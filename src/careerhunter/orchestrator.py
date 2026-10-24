@@ -16,6 +16,7 @@ from .intelligence.company import build_company_signals
 from .intelligence.people import discover_public_contacts
 from .models import RunStats, utc_now
 from .notifications.ntfy import publish_run
+from .notifications.telegram import publish_daily_digest, publish_failure
 from .llm.provider import create_provider
 from .reporting.daily import render_jobs, write_report
 from .reporting.network import render_network, write_network_report
@@ -27,6 +28,7 @@ class Orchestrator:
             "CAREERHUNTER_DB", project_path("data", "careerhunter.db")
         )
         self.repo = repo or create_repository(default_path)
+        self._telegram_candidates = []
 
     def run(self, slot: str, dry_run: bool = False) -> tuple[RunStats, Path | None]:
         stats = RunStats(slot=slot, started_at=utc_now())
@@ -50,6 +52,11 @@ class Orchestrator:
             if not dry_run:
                 self.repo.record_run(stats)
                 publish_run(stats)
+                if slot == "jobs":
+                    if stats.status == "success":
+                        publish_daily_digest(stats, self._telegram_candidates)
+                    else:
+                        publish_failure(stats)
         return stats, report_path
 
     def _jobs(self, stats: RunStats, dry_run: bool) -> tuple[RunStats, Path]:
@@ -107,6 +114,10 @@ class Orchestrator:
             stats.llm_calls = budget.calls if budget else 0
             stats.llm_tokens = budget.tokens if budget else 0
             stats.llm_cost_usd = budget.cost_usd if budget else 0
+        # Capture only genuinely new records after database upsert mutates
+        # existing jobs to "seen"; LLM may have enriched the same objects.
+        if not dry_run:
+            self._telegram_candidates = [job for job in jobs if job.status == "new"]
         content = render_jobs(jobs, stats)
         if errors:
             content += "\n## Kaynak hataları\n\n" + "\n".join(f"- {e}" for e in errors) + "\n"
