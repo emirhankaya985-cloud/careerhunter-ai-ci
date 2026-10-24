@@ -30,6 +30,7 @@ class Job(BaseModel):
     job_url: HttpUrl
     source_url: HttpUrl
     match_score: int | None = Field(default=None, ge=0, le=100)
+    match_method: Literal["rules", "llm"] = "rules"
     eligibility_status: Literal["eligible", "needs_review", "ineligible"] = "needs_review"
     status: Literal["new", "seen", "closed"] = "new"
     score_reasons: list[str] = Field(default_factory=list)
