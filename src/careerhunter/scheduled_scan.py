@@ -188,3 +188,47 @@ def start_rescore(request: Request) -> dict[str, object]:
         })
         threading.Thread(target=_rescore, name="careerhunter-rescore", daemon=True).start()
         return dict(_state)
+
+
+def _enrich_historical_with_nvidia() -> None:
+    """Bounded semantic enrichment of historic matches, not a full re-scan."""
+    try:
+        from .private_site import _settings
+        from .personal_rescore import enrich_best_existing
+        url = _settings()[2]
+        if not url.startswith("postgresql+psycopg://"):
+            raise RuntimeError("AI enrichment requires hosted PostgreSQL")
+        count = enrich_best_existing(url, limit=8)
+        with _lock:
+            _state.clear()
+            _state.update({
+                "status": "success", "mode": "ai",
+                "jobs_processed": count, "jobs_new": 0,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+            })
+    except Exception as exc:
+        logger.warning("Historical NVIDIA enrichment failed: %s", type(exc).__name__)
+        with _lock:
+            _state.clear()
+            _state.update({
+                "status": "failed", "mode": "ai",
+                "error_type": type(exc).__name__,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+            })
+
+
+@router.post("/internal/ai-rescore")
+def start_ai_rescore(request: Request) -> dict[str, object]:
+    _require_github_oidc(request, workflow=RESCORE_WORKFLOW)
+    with _lock:
+        if _state.get("status") == "running":
+            return dict(_state)
+        _state.clear()
+        _state.update({
+            "status": "running",
+            "mode": "ai",
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        })
+        threading.Thread(target=_enrich_historical_with_nvidia,
+                         name="careerhunter-nvidia", daemon=True).start()
+        return dict(_state)
