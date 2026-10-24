@@ -115,3 +115,22 @@ def test_invalid_chat_and_token_are_rejected(monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", TOKEN)
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "not-a-chat")
     assert not telegram.is_configured()
+
+
+def test_get_updates_filters_private_start_chats(configured, httpx_mock):
+    httpx_mock.add_response(
+        url=f"https://api.telegram.org/bot{TOKEN}/getUpdates",
+        match_params={"limit": "40", "timeout": "0", "allowed_updates": '["message"]'},
+        json={"ok": True, "result": [
+            {"message": {
+                "text": "/start", "chat": {"id": 22334455, "type": "private"},
+                "from": {"username": "owner", "is_bot": False}}},
+            {"message": {
+                "text": "/start", "chat": {"id": -10044121, "type": "supergroup"},
+                "from": {"username": "group"}}},
+            {"message": {
+                "text": "hi", "chat": {"id": 887766, "type": "private"},
+                "from": {"username": "other"}}}
+        ]},
+    )
+    assert telegram.recent_private_start_chats() == [(22334455, "owner")]
