@@ -127,10 +127,10 @@ def test_nvidia_probe_is_exact_oidc_protected_and_uses_synthetic_data(client, mo
     identity["workflow_ref"] = scan.SMOKE_WORKFLOW
     monkeypatch.setenv("LLM_PROVIDER", "nvidia")
     monkeypatch.setenv("NVIDIA_API_KEY", "fake-test-nvidia")
-    monkeypatch.setenv("LLM_MODEL", "nvidia/nemotron-3-super-120b-a12b")
+    monkeypatch.setenv("LLM_MODEL", "nvidia/nemotron-3.5-super-vl-120b-a12b")
     seen = []
     class FakeProvider:
-        model = "nvidia/nemotron-3-super-120b-a12b"
+        model = "nvidia/nemotron-3.5-super-vl-120b-a12b"
         def analyze_job(self, profile, text):
             seen.append((profile, text))
             return JobAnalysis(
@@ -140,6 +140,6 @@ def test_nvidia_probe_is_exact_oidc_protected_and_uses_synthetic_data(client, mo
     result = client.post("/internal/nvidia-smoke", headers=headers)
     assert result.status_code == 200
     assert result.json()["status"] == "success"
-    assert result.json()["model"] == "nvidia/nemotron-3-super-120b-a12b"
+    assert result.json()["model"] == "nvidia/nemotron-3.5-super-vl-120b-a12b"
     assert seen[0][0]["target_roles"] == ["Junior Python Developer"]
     assert "example.com" not in seen[0][1]
