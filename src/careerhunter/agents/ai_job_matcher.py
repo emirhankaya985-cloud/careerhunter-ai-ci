@@ -20,10 +20,11 @@ class AIJobMatcher:
             return job
         score = result.total
         # A model must not override verified geographical restrictions.
-        if job.turkey_eligibility == "ineligible":
-            score = min(score, 30)
+        if (job.turkey_eligibility == "ineligible" or
+                result.turkey_eligibility == "ineligible"):
+            score = 0
         if job.experience_level == "senior":
-            score = min(score, 35)
+            score = min(score, 20)
         job.match_score = max(0, min(100, score))
         # Eligibility can only be improved by the explicit evidence-based pass.
         if result.turkey_eligibility == "ineligible":
