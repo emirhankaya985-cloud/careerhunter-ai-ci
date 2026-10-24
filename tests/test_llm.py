@@ -112,10 +112,59 @@ def test_nvidia_uses_super_and_ultra_failover(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "nvidia")
     monkeypatch.setenv("NVIDIA_SUPER_API_KEY", "super-key")
     monkeypatch.setenv("NVIDIA_ULTRA_API_KEY", "ultra-key")
+    monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
+    monkeypatch.setenv("NVIDIA_ENABLE_FALLBACK", "true")
     monkeypatch.delenv("LLM_API_KEY", raising=False)
     monkeypatch.delenv("LLM_MODEL", raising=False)
     monkeypatch.delenv("LLM_BASE_URL", raising=False)
     provider = create_provider()
     assert isinstance(provider, FailoverProvider)
-    assert provider.primary.model == "nvidia/nemotron-3-super-120b-a12b"
+    assert provider.primary.model == "nvidia/nemotron-3.5-lightning-30b-a3b"
     assert provider.secondary.model == "nvidia/nemotron-3-ultra-550b-a55b"
+
+
+def test_nvidia_public_key_enables_trial_model_without_fallback(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "nvidia")
+    monkeypatch.setenv("NVIDIA_API_KEY", "test-build-key")
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("NVIDIA_ENABLE_FALLBACK", raising=False)
+    provider = create_provider()
+    assert isinstance(provider, OpenAICompatibleProvider)
+    assert provider.nvidia
+    assert provider.model == "nvidia/nemotron-3.5-lightning-30b-a3b"
+    assert provider.api_key == "test-build-key"
+    assert provider.url == "https://integrate.api.nvidia.com/v1/chat/completions"
+
+
+def test_nvidia_sends_nonreasoning_json_and_stops_after_rate_limit(httpx_mock):
+    import httpx
+    from careerhunter.llm.provider import configured_provider
+    provider = OpenAICompatibleProvider(
+        "https://integrate.api.nvidia.com/v1", "dummy", "nvidia/nemotron-3.5-lightning-30b-a3b",
+        Budget(max_calls=3), nvidia=True
+    )
+    httpx_mock.add_response(
+        url=provider.url,
+        json={"choices": [{"message": {"content": json.dumps(VALID)}}],
+              "usage": {"total_tokens": 211}}
+    )
+    provider.analyze_job({"skills": ["Python"]}, "Python developer")
+    sent = json.loads(httpx_mock.get_request().content)
+    assert sent["chat_template_kwargs"] == {"enable_thinking": False}
+    assert sent["response_format"]["type"] == "json_object"
+    assert sent["max_tokens"] <= 800
+    assert provider.budget.calls == 1
+
+    limited = OpenAICompatibleProvider(
+        "https://integrate.api.nvidia.com/v1", "dummy", "nvidia/nemotron-3.5-lightning-30b-a3b",
+        Budget(max_calls=3), nvidia=True
+    )
+    httpx_mock.add_response(url=limited.url, status_code=429)
+    with pytest.raises(LLMBudgetExceeded):
+        limited.analyze_job({}, "test")
+    sent_before = len(httpx_mock.get_requests())
+    with pytest.raises(LLMBudgetExceeded):
+        limited.analyze_job({}, "test")
+    assert len(httpx_mock.get_requests()) == sent_before
