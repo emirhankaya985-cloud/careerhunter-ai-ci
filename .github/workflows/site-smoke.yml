@@ -1,0 +1,58 @@
+name: Live Render dashboard smoke check
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/site-smoke.yml
+  schedule:
+    - cron: '30 7 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify live dashboard, database, and anonymous protection
+        env:
+          BASE_URL: https://careerhunter-private-dashboard.onrender.com
+        run: |
+          python - <<'PY'
+          import os
+          import time
+          import urllib.error
+          import urllib.request
+
+          base = os.environ["BASE_URL"]
+          def get(path):
+              request = urllib.request.Request(
+                  base + path, headers={"User-Agent": "CareerHunter-CI-Smoke/1.0"})
+              with urllib.request.urlopen(request, timeout=40) as response:
+                  body = response.read(4096).decode("utf-8", errors="replace")
+                  return response.status, response.geturl(), body, response.headers
+
+          for retry in range(8):
+              try:
+                  status, final_url, body, headers = get("/readyz")
+                  assert status == 200 and body.strip() == "ready", (
+                      f"Database readiness invalid: status={status}, body={body[:80]!r}")
+                  print("PASS: database schema and SQL SELECT checks")
+                  break
+              except (urllib.error.URLError, AssertionError, TimeoutError) as exc:
+                  if retry == 7:
+                      raise SystemExit(
+                          f"FAIL: live PostgreSQL readiness never succeeded: {type(exc).__name__}: {exc}")
+                  time.sleep(20)
+
+          status, final_url, body, headers = get("/")
+          assert status == 200 and final_url.endswith("/login"), (
+              "FAIL: anonymous access was not redirected to the login page")
+          assert "no-store" in headers.get("Cache-Control", ""), (
+              "FAIL: private dashboard caching must be disabled")
+          assert headers.get("X-Frame-Options") == "DENY", (
+              "FAIL: frame guard missing")
+          print("PASS: anonymous redirect, login page, and security headers")
+          PY
