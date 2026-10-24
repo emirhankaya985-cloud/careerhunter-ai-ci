@@ -49,6 +49,9 @@ jobs:
           if response["status"] != "success":
               print("Safe error category:", response.get("error_type", response["status"]))
               print("NVIDIA HTTP code:", response.get("http_status"))
+              print("Official NVIDIA endpoint:", response.get("official_endpoint"))
+              print("API catalog HTTP code:", response.get("models_http_status"))
+              print("120B is listed in catalog:", response.get("model_is_listed"))
               raise SystemExit("FAIL: NVIDIA 120B inference not verified")
           print("PASS: NVIDIA 120B one-call synthetic inference")
           PY
