@@ -146,9 +146,9 @@ class RuleBasedMatcher:
 
         total = technical + experience_points + career_points + remote_points + freshness
         if is_senior or requires_senior_experience:
-            total = min(total, 35)
+            total = min(total, 20)
         if abroad_only and remote:
-            total = min(total, 30)
+            total = 0
         job.match_score = min(100, max(0, total))
         job.skills_required = matched
         job.score_reasons = [
