@@ -1,120 +1,32 @@
 name: Daily Career Intelligence
+
+# A 09:17 Turkey time scheduled run with a zero-secret identity token.
+# Render owns the DB URL; the runner only requests a short-lived GitHub OIDC token.
 on:
   workflow_dispatch:
-    inputs:
-      slot:
-        description: Slot to run
-        required: true
-        default: jobs
-        type: choice
-        options: [jobs, network, future]
+  push:
+    paths:
+      - .github/workflows/daily.yml
   schedule:
-    - cron: '0 9 * * *'
-      timezone: Europe/Istanbul
-
-concurrency:
-  group: careerhunter-state
-  cancel-in-progress: false
+    - cron: '17 6 * * *'
 
 permissions:
   contents: read
+  id-token: write
+
+concurrency:
+  group: careerhunter-production-collector
+  cancel-in-progress: false
 
 jobs:
-  run:
-    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+  collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
-    env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'rules' }}
-      LLM_MODEL: ${{ vars.LLM_MODEL }}
-      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: pip
-      - run: pip install -e .
-
-      - name: Require persistent production PostgreSQL
-        id: database
+      - name: Collect real job postings in Render PostgreSQL
         shell: bash
-        run: |
-          if [ -z "${DATABASE_URL:-}" ]; then
-            echo 'DATABASE_URL missing: refusing temporary SQLite success' >&2
-            exit 1
-          fi
-          case "$DATABASE_URL" in
-            postgres://*|postgresql://*|postgresql+psycopg://*) ;;
-            *) echo 'DATABASE_URL must point to PostgreSQL' >&2; exit 1 ;;
-          esac
-
-      - name: Collect selected job slot
-        id: collection
-        if: steps.database.outcome == 'success'
-        shell: bash
-        env:
-          MANUAL_SLOT: ${{ inputs.slot }}
-        run: |
-          mkdir -p reports
-          slot="${MANUAL_SLOT:-jobs}"
-          python -m careerhunter run --slot "$slot"
-
-      - name: Refresh public network records on daily runs
-        id: network
-        if: (github.event_name == 'schedule' || github.event_name == 'push') && steps.collection.outcome == 'success'
-        shell: bash
-        run: python -m careerhunter run --slot network
-
-      - name: Export full-database aggregate and bounded dashboard
-        id: export
-        if: always() && steps.database.outcome == 'success'
-        shell: bash
-        run: |
-          mkdir -p reports
-          python -m careerhunter.dashboard --output reports/dashboard.json --limit 500
-
-      - name: Write honest daily status
-        id: summary
-        if: always()
-        env:
-          DB_RESULT: ${{ steps.database.outcome }}
-          COLLECT_RESULT: ${{ steps.collection.outcome }}
-          NETWORK_RESULT: ${{ steps.network.outcome }}
-          EXPORT_RESULT: ${{ steps.export.outcome }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          python -m careerhunter.reporting.ops_summary --snapshot reports/dashboard.json --output reports/daily-run.json
-
-      - name: Send one aggregate ntfy report or explicit failure notice
-        id: notification
-        if: always()
-        env:
-          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-          NTFY_ACCEPTANCE_FILE: reports/ntfy-acceptance.json
-        run: |
-          python -m careerhunter.reporting.ops_summary --notify --output reports/daily-run.json
-
-      - name: Upload results even after failure
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: careerhunter-report-${{ github.run_id }}
-          path: |
-            reports/daily-run.json
-            reports/ntfy-acceptance.json
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Display status and run link
-        if: always()
-        shell: bash
-        run: |
-          echo "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> "$GITHUB_STEP_SUMMARY"
-          if [ -f reports/daily-run.json ]; then
-            cat reports/daily-run.json >> "$GITHUB_STEP_SUMMARY"
-          fi
-          if [ -f reports/ntfy-acceptance.json ]; then
-            cat reports/ntfy-acceptance.json >> "$GITHUB_STEP_SUMMARY"
-          fi
+        run: python src/careerhunter/render_scan_client.py
