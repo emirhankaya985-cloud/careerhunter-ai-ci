@@ -63,10 +63,14 @@ def wait_ready() -> None:
 
 def main() -> int:
     wait_ready()  # Wakes a free Render instance before requesting the short-lived OIDC JWT.
-    started = call("/internal/scan", method="POST")
+    is_rescore = "--rescore" in sys.argv[1:]
+    endpoint = "/internal/rescore" if is_rescore else "/internal/scan"
+    started = call(endpoint, method="POST")
     if started.get("status") != "running":
         raise RuntimeError("Collector did not start: " + str(started.get("status")))
-    print("Authenticated collector accepted by Render")
+    if is_rescore and started.get("mode") != "rescore":
+        raise RuntimeError("Another production task is running; retry rescore later")
+    print("Authenticated Render task accepted")
 
     deadline = time.monotonic() + 26 * 60
     last_status = None
@@ -77,11 +81,14 @@ def main() -> int:
             print("Collector state:", status)
             last_status = status
         if status == "success":
+            if is_rescore and state.get("mode") != "rescore":
+                raise RuntimeError("Rescore task was replaced by another task")
             processed = int(state.get("jobs_processed", 0))
             added = int(state.get("jobs_new", 0))
             if processed <= 0:
                 raise RuntimeError("Production collector returned zero jobs")
-            summary = f"Collected {processed} job rows; {added} newly stored."
+            summary = (f"Rescored {processed} stored jobs" if is_rescore
+                       else f"Collected {processed} job rows; {added} newly stored.")
             print("PASS:", summary)
             print("Partial ATS source failures:", bool(state.get("sources_partial")))
             with open(os.environ.get("GITHUB_STEP_SUMMARY", os.devnull), "a", encoding="utf-8") as out:
