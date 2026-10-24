@@ -30,5 +30,8 @@ def test_legacy_workflows_are_manual_only_without_collector_secrets():
 def test_no_linkedin_automation_module_exists():
     python_files = list((ROOT / "src").rglob("*.py"))
     content = "\n".join(path.read_text(encoding="utf-8") for path in python_files)
-    forbidden = ["linkedin_cookie", "selenium", "playwright", "send_connection_request"]
+    forbidden = ["linkedin_cookie", "send_connection_request",
+                 "import selenium", "from selenium",
+                 "import playwright", "from playwright"]
+    # Mentioning Playwright as a CV skill does not mean browser automation is enabled.
     assert not any(term in content.lower() for term in forbidden)
