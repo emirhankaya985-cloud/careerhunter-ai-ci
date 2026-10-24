@@ -1,0 +1,27 @@
+name: Personalized CareerHunter Re-ranking
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/personalize.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: careerhunter-production-collector
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Backfill private personal match scores in Render
+        run: python src/careerhunter/render_scan_client.py --rescore
