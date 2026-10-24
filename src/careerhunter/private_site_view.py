@@ -144,26 +144,30 @@ nav .links{display:flex;flex-wrap:wrap}.sidebarbottom,.tiny{display:none}main{pa
 <strong>{{ latest.slot if latest else 'Henüz kayıt yok' }}</strong> ·
 {{ latest.status if latest else 'Bilinmiyor' }}
 {% if latest and latest.started_at %}<br>{{ latest.started_at }} (UTC){% endif %}</p>
-<a class="link" href="https://github.com/emirhankaya-AFK/careerhunter-ai/actions" target="_blank" rel="noopener noreferrer">GitHub otomasyonlarını görüntüle ↗</a>
+<a class="link" href="https://github.com/emirhankaya985-cloud/careerhunter-ai-ci/actions" target="_blank" rel="noopener noreferrer">GitHub otomasyonlarını görüntüle ↗</a>
 </section></div>
 <section class="panel"><div class="row space"><h2>📌 Son ilanlar</h2><a class="link" href="/?view=jobs">Tüm ilanlara bak →</a></div>
-<div class="tablewrap"><table><thead><tr><th>POZİSYON</th><th>ŞİRKET</th><th>LOKASYON</th><th>KAYNAK</th></tr></thead><tbody>
+<div class="tablewrap"><table><thead><tr><th>POZİSYON</th><th>ŞİRKET</th><th>LOKASYON</th><th>EŞLEŞME</th><th>KAYNAK</th></tr></thead><tbody>
 {% for j in job_rows %}<tr><td><strong>{{ j.title }}</strong></td><td>{{ j.company }}</td><td>{{ j.location }}</td>
+<td><strong>{{ j.match_score if j.match_score is not none else "—" }}/100</strong><div class="small muted">{{ "AI analizi" if j.match_method == "llm" else "Profil puanı" }}</div></td>
 <td><a href="{{ j.job_url|safe_href }}" class="link" target="_blank" rel="noopener noreferrer">İlana git ↗</a></td></tr>{% endfor %}
 </tbody></table></div>
 </section>
 {% elif view=='jobs' %}
-<form class="search" method="get" action="/"><input type="hidden" name="view" value="jobs">
+<form class="search" method="get" action="/"><input type="hidden" name="view" value="jobs"><input type="hidden" name="sort" value="{{ sort }}">
 <input class="searchinput" type="search" name="q" maxlength="80" placeholder="İlan, şirket veya lokasyon ara" value="{{ query }}">
 <button class="action" type="submit">Ara</button></form>
 <section class="panel"><div class="row space"><h2>🔎 İş fırsatları</h2><span class="muted small">Sayfa başı 40 ilan · {{ page }}. sayfa</span></div>
-<div class="tablewrap"><table><thead><tr><th>POZİSYON</th><th>ŞİRKET</th><th>KONUM</th><th>KAYNAK</th></tr></thead><tbody>
+<div class="row"><a class="pagebtn" href="/?view=jobs&sort=fit&q={{ query|urlencode }}">🎯 En uygun ilanlar {% if sort=="fit" %}✓{% endif %}</a><a class="pagebtn" href="/?view=jobs&sort=recent&q={{ query|urlencode }}">🕓 En yeni ilanlar {% if sort=="recent" %}✓{% endif %}</a></div>
+<p class="small muted">Puan kişisel profil eşleşmesidir; vize ve uzaktan çalışma uygunluğu ayrıca doğrulanır.</p>
+<div class="tablewrap"><table><thead><tr><th>POZİSYON</th><th>ŞİRKET</th><th>KONUM</th><th>PUAN</th><th>KAYNAK</th></tr></thead><tbody>
 {% for j in job_rows %}<tr><td><strong>{{ j.title }}</strong><div class="small muted">{{ j.source }} · {{ j.job_id }}</div></td><td>{{ j.company }}</td><td>{{ j.location }}</td>
-<td><a class="link" href="{{ j.job_url|safe_href }}" target="_blank" rel="noopener noreferrer">İlana git ↗</a></td></tr>{% else %}<tr><td colspan="4" class="empty">Bu aramada sonuç bulunamadı.</td></tr>{% endfor %}
+<td><span class="tag">{{ j.match_score if j.match_score is not none else "—" }}/100</span><div class="small muted">{{ "AI analizi" if j.match_method == "llm" else "Profil puanı" }}</div><div class="small muted">{{ "Türkiye: uygun kanıt" if j.eligibility_status == "eligible" else "Türkiye: uygun değil" if j.eligibility_status == "ineligible" else "Çalışma koşulu: teyit gerekli" }}</div><details><summary class="small">Neden bu puan?</summary>{% for reason in j.score_reasons[:5] %}<div class="small muted">{{ reason }}</div>{% endfor %}</details></td>
+<td><a class="link" href="{{ j.job_url|safe_href }}" target="_blank" rel="noopener noreferrer">İlana git ↗</a></td></tr>{% else %}<tr><td colspan="5" class="empty">Bu aramada sonuç bulunamadı.</td></tr>{% endfor %}
 </tbody></table></div>
 <div class="pagination">
-{% if page>1 %}<a class="pagebtn" href="/?view=jobs&q={{ query|urlencode }}&page={{ page-1 }}">← Önceki</a>{% endif %}
-{% if has_next %}<a class="pagebtn" href="/?view=jobs&q={{ query|urlencode }}&page={{ page+1 }}">Sonraki →</a>{% endif %}
+{% if page>1 %}<a class="pagebtn" href="/?view=jobs&q={{ query|urlencode }}&sort={{ sort }}&page={{ page-1 }}">← Önceki</a>{% endif %}
+{% if has_next %}<a class="pagebtn" href="/?view=jobs&q={{ query|urlencode }}&sort={{ sort }}&page={{ page+1 }}">Sonraki →</a>{% endif %}
 </div></section>
 {% elif view=='people' %}
 <div class="panel"><h2>👥 Kişi kayıtları ve kişisel mesajlar</h2>
