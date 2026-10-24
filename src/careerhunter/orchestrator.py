@@ -10,6 +10,7 @@ from .agents.ai_job_matcher import AIJobMatcher
 from .agents.hook_writer import prepare_drafts
 from .agents.job_matcher import RuleBasedMatcher
 from .config import load_yaml, project_path
+from .personal_profile import load_match_profile
 from .database import DatabaseRepository, create_repository
 from .intelligence.company import build_company_signals
 from .intelligence.people import discover_public_contacts
@@ -54,7 +55,8 @@ class Orchestrator:
     def _jobs(self, stats: RunStats, dry_run: bool) -> tuple[RunStats, Path]:
         source_cfg = load_yaml("sources.yaml")
         companies = load_yaml("companies.yaml").get("companies", [])
-        matcher = RuleBasedMatcher(load_yaml("profile.yaml"), load_yaml("keywords.yaml"))
+        profile = load_match_profile()
+        matcher = RuleBasedMatcher(profile, load_yaml("keywords.yaml"))
         jobs = []
         errors = []
         attempted = successful = 0
@@ -88,14 +90,19 @@ class Orchestrator:
                 self.repo.upsert_company_signal(signal)
         provider = create_provider()
         if provider:
-            ai_matcher = AIJobMatcher(provider, load_yaml("profile.yaml"))
+            ai_matcher = AIJobMatcher(provider, profile)
             candidates = sorted(
                 (job for job in jobs if (job.match_score or 0) >= 65),
                 key=lambda job: job.match_score or 0,
                 reverse=True,
             )[:10]
+            updated = []
             for job in candidates:
                 ai_matcher.enrich(job)
+                if job.match_method == "llm":
+                    updated.append(job)
+            if not dry_run and updated:
+                self.repo.update_job_scores(updated)
             budget = getattr(provider, "budget", None)
             stats.llm_calls = budget.calls if budget else 0
             stats.llm_tokens = budget.tokens if budget else 0
