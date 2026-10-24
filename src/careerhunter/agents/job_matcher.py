@@ -68,7 +68,7 @@ class RuleBasedMatcher:
         min_years = [
             int(v) for v in re.findall(
                 r"(?:minimum|at least|requires?|with|of)?\s*(\d{1,2})\+?\s+"
-                r"years?(?:\\s+(?:of\\s+)?(?:relevant\\s+|professional\\s+|industry\\s+)?experience)?", text
+                r"years?(?:\s+(?:of\s+)?(?:relevant\s+|professional\s+|industry\s+)?experience)?", text
 
             )
         ]
