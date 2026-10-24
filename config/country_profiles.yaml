@@ -1,0 +1,30 @@
+# Country targeting rules. These are screening hints, not legal advice.
+countries:
+  United States:
+    aliases: [US, USA, America]
+    remote_keywords: ["remote - us", "us remote", "united states", "usa"]
+    work_authorization_required: true
+    sponsorship_keywords: [sponsorship, "visa sponsorship", h1b, opt, stem opt]
+    official_work_source: https://www.uscis.gov/working-in-the-united-states
+    strategy: prioritize remote roles explicitly open to international contractors; otherwise require sponsorship evidence
+  United Kingdom:
+    aliases: [UK, Britain, England]
+    remote_keywords: ["remote - uk", "uk remote", "united kingdom", london]
+    work_authorization_required: true
+    sponsorship_keywords: [sponsorship, "skilled worker", "certificate of sponsorship"]
+    official_work_source: https://www.gov.uk/skilled-worker-visa
+    strategy: prioritize UK-remote roles that state overseas/contractor eligibility; do not infer eligibility from “remote” alone
+  Türkiye:
+    aliases: [Turkey, Türkiye]
+    remote_keywords: [turkey, türkiye, istanbul, ankara, remote]
+    work_authorization_required: false
+    sponsorship_keywords: ["work permit", "çalışma izni"]
+    official_work_source: https://www.csgb.gov.tr/en/frequently-asked-questions/directorate-general-of-international-labour-force/work-permit/
+    strategy: prioritize local and Türkiye-eligible remote roles; flag foreign-employer tax/payroll uncertainty
+  Australia:
+    aliases: [AU, AUS]
+    remote_keywords: ["remote - australia", "australia remote", australia, sydney, melbourne]
+    work_authorization_required: true
+    sponsorship_keywords: [sponsorship, "skills in demand", "subclass 482", "skilled visa"]
+    official_work_source: https://immi.homeaffairs.gov.au/visas/working-in-australia/temporary-work-visas
+    strategy: prioritize roles with explicit Australian work rights or employer sponsorship; remote-from-Türkiye is separate

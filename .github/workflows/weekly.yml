@@ -1,0 +1,26 @@
+name: Weekly Career Strategy
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 18 * * 0'
+      timezone: Europe/Istanbul
+concurrency:
+  group: careerhunter-state
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  weekly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11', cache: pip}
+      - run: pip install -e .
+      - run: python -m careerhunter run --slot weekly
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      - name: Weekly run metadata only
+        run: echo 'Weekly workflow completed; reports are never public artifacts.' >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,13 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+reports/*.md
+!reports/.gitkeep
+data/*.db
+!data/.gitkeep
+*.db-wal
+*.db-shm
+

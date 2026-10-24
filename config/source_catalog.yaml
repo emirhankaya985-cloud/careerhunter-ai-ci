@@ -1,0 +1,47 @@
+version: 1
+description: Official ATS endpoints grouped by target country. A source is healthy only when its endpoint returns a non-error JSON payload.
+sources:
+  - id: greenhouse-gitlab
+    company: GitLab
+    provider: greenhouse
+    slug: gitlab
+    countries: [US, GB, AU, TR]
+    endpoint: https://boards-api.greenhouse.io/v1/boards/gitlab/jobs?content=true
+    careers_url: https://about.gitlab.com/company/culture/all-remote/
+  - id: greenhouse-stripe
+    company: Stripe
+    provider: greenhouse
+    slug: stripe
+    countries: [US, GB, AU]
+    endpoint: https://boards-api.greenhouse.io/v1/boards/stripe/jobs?content=true
+    careers_url: https://stripe.com/jobs
+  - id: ashby-openai
+    company: OpenAI
+    provider: ashby
+    slug: openai
+    countries: [US, GB, AU]
+    endpoint: https://api.ashbyhq.com/posting-api/job-board/openai
+    careers_url: https://openai.com/careers/
+  - id: ashby-linear
+    company: Linear
+    provider: ashby
+    slug: linear
+    countries: [US, GB, AU]
+    endpoint: https://api.ashbyhq.com/posting-api/job-board/linear
+    careers_url: https://linear.app/careers
+  # Turkey-focused official Greenhouse boards. These are real ATS JSON
+  # endpoints; country counts still come from each posting's location text.
+  - id: greenhouse-insider
+    company: Insider
+    provider: greenhouse
+    slug: insider
+    countries: [TR]
+    endpoint: https://boards-api.greenhouse.io/v1/boards/insider/jobs?content=true
+    careers_url: https://useinsider.com/careers/
+  - id: greenhouse-peak
+    company: Peak
+    provider: greenhouse
+    slug: peak
+    countries: [TR]
+    endpoint: https://boards-api.greenhouse.io/v1/boards/peak/jobs?content=true
+    careers_url: https://www.peak.com/careers/

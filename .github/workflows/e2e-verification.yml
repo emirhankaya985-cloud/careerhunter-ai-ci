@@ -1,0 +1,69 @@
+name: Controlled E2E and Live ATS Health
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "src/careerhunter/**"
+      - "tests/test_e2e_workflow.py"
+      - ".github/workflows/e2e-verification.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -e '.[dev]'
+      - name: Isolated, deterministic end-to-end proof
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p reports/live-proof
+          pytest -q tests/test_e2e_workflow.py tests/test_live_verify.py | tee reports/live-proof/fixture-e2e.log
+      - name: Check actual public ATS health separately
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from careerhunter.source_health import check_catalog
+          rows = check_catalog(timeout=20)
+          codes = ("US", "GB", "AU", "TR")
+          healthy = {
+              code: sum(row.get("status") == "success" for row in rows if code in row.get("countries", []))
+              for code in codes
+          }
+          good = bool(rows) and all(count > 0 for count in healthy.values())
+          result = {
+              "status": "success" if good else "error",
+              "isolated_e2e": "pytest (fixture-based; no production data writes)",
+              "public_ats": "real live HTTP/API responses; no production data writes",
+              "healthy_sources_by_country": healthy,
+              "sources": rows,
+              "automatic_messages_sent": 0,
+          }
+          path = Path("reports/live-proof/verification.json")
+          path.parent.mkdir(parents=True, exist_ok=True)
+          path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+          print(json.dumps({"status": result["status"], "healthy_sources_by_country": healthy}, indent=2))
+          if not good:
+              raise SystemExit("No healthy public ATS endpoint in one or more target countries")
+          PY
+      - name: Publish workflow artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: careerhunter-e2e-live-ats-${{ github.run_id }}
+          path: reports/live-proof/*
+      - name: Publish summary
+        if: always()
+        run: |
+          cat reports/live-proof/fixture-e2e.log >> "$GITHUB_STEP_SUMMARY" || true
+          cat reports/live-proof/verification.json >> "$GITHUB_STEP_SUMMARY" || true

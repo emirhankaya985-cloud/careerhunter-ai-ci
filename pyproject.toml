@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "careerhunter-ai"
+version = "0.1.0"
+description = "Privacy-conscious job intelligence MVP"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "httpx>=0.27,<1",
+  "pydantic>=2.7,<3",
+  "PyYAML>=6,<7",
+  "SQLAlchemy>=2.0,<3",
+  "psycopg[binary]>=3.2,<4",
+]
+
+[project.optional-dependencies]
+web = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1", "itsdangerous>=2.2,<3", "jinja2>=3.1,<4"]
+dev = ["pytest>=8,<9", "pytest-httpx>=0.30,<1", "ruff>=0.6,<1",
+       "fastapi>=0.115,<1", "uvicorn>=0.30,<1", "itsdangerous>=2.2,<3", "jinja2>=3.1,<4"]
+
+[project.scripts]
+careerhunter = "careerhunter.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/careerhunter"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# Keep local and CI behavior stable across Ruff releases. Broader rule families are
+# introduced deliberately after the existing code is remediated.
+select = ["E4", "E7", "E9", "F"]
+

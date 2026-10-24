@@ -1,0 +1,6 @@
+positive: [python, backend, machine learning, artificial intelligence, automation, computer vision, data engineer, data scientist, qa automation, fraud, risk]
+junior: [junior, entry level, graduate, new grad, associate, internship]
+senior: [senior, staff, principal, lead, manager, director, architect]
+turkey_positive: [worldwide, anywhere, global remote, türkiye, turkey]
+turkey_negative: [us only, united states only, must reside in the us, usa only, eu only, european union only, uk only, germany only]
+

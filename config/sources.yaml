@@ -1,0 +1,4 @@
+timeout_seconds: 20
+max_retries: 3
+user_agent: CareerHunterAI/0.1 (+https://github.com/OWNER/careerhunter-ai)
+

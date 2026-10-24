@@ -1,0 +1,47 @@
+# Replace/add board slugs after checking each company's official careers page.
+companies:
+  - name: OpenAI
+    ashby: openai
+    countries: [US, GB, AU]
+    team_url: https://openai.com/careers/
+  - name: Stripe
+    greenhouse: stripe
+    countries: [US, GB, AU]
+    team_url: https://stripe.com/jobs
+  - name: Flex
+    lever: Flex
+    countries: [US, GB, AU]
+  - name: Ashby
+    ashby: ashby
+    countries: [US, GB, AU]
+    team_url: https://www.ashbyhq.com/careers
+  # Official source validated on 2026-10-19: page publishes explicit
+  # first-name + role cards (for example, "Jane — Machine Learning Engineer").
+  # No ATS slug is configured here; this entry is intentionally for the
+  # network discovery stage and is not treated as a hiring-manager source.
+  - name: Uber
+    team_url: https://jobs.uber.com/en/teams/engineering/
+    countries: [US, GB, AU]
+  - name: GitLab
+    greenhouse: gitlab
+    team_url: https://about.gitlab.com/company/team/
+    countries: [US, GB, AU]
+  - name: Canva
+    team_url: https://www.canva.com/careers/teams/engineering/
+    countries: [AU, US, GB]
+  - name: Atlassian
+    team_url: https://www.atlassian.com/company/careers/engineering
+    countries: [AU, US, GB]
+  - name: Linear
+    ashby: linear
+    team_url: https://linear.app/careers
+    countries: [US, GB, AU]
+  - name: Insider
+    greenhouse: insider
+    team_url: https://useinsider.com/careers/
+    countries: [TR]
+  - name: Peak
+    greenhouse: peak
+    team_url: https://www.peak.com/careers/
+    countries: [TR]
+

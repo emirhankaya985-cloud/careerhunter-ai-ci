@@ -1,0 +1,10 @@
+weights:
+  technical_fit: 35
+  experience_fit: 25
+  career_fit: 20
+  remote_fit: 10
+  freshness: 10
+thresholds:
+  strong: 80
+  considerable: 65
+

@@ -1,0 +1,20 @@
+# PUBLIC SAMPLE PROFILE: replace with private configuration for actual matching.
+location: Türkiye
+education: not specified
+expected_graduation: null
+professional_years: 0
+skills: [Python, SQL, AI, automation, data analysis, JavaScript]
+languages: [Turkish, English]
+experience: []
+certifications: []
+target_roles:
+  - Python Developer
+  - Junior AI Engineer
+  - AI Automation Engineer
+  - Backend Python Developer
+  - Data Engineer
+  - QA Automation Engineer
+preferred_sectors: [AI SaaS, fintech, data engineering, developer tools]
+preferred_countries: [United States, United Kingdom, Türkiye, Australia]
+target_countries: [United States, United Kingdom, Türkiye, Australia]
+work_preferences: [worldwide remote, contractor, Türkiye eligible]

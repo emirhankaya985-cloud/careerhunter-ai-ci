@@ -1,0 +1,19 @@
+# Private owner dashboard. No production records are copied into GitHub Pages.
+# Render will ask for secrets; do not put values in this file.
+services:
+  - type: web
+    name: careerhunter-private-dashboard
+    runtime: python
+    plan: free
+    buildCommand: pip install -e '.[web]'
+    startCommand: uvicorn careerhunter.private_site:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /readyz
+    envVars:
+      - key: DASHBOARD_DATABASE_URL
+        sync: false
+      - key: DASHBOARD_PASSWORD
+        sync: false
+      - key: DASHBOARD_SESSION_SECRET
+        generateValue: true
+      - key: DASHBOARD_SECURE_COOKIE
+        value: "true"

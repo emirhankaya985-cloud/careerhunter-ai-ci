@@ -1,0 +1,149 @@
+name: Four-country daily verification
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 9 * * *'
+      timezone: Europe/Istanbul
+
+permissions:
+  contents: read
+
+concurrency:
+  group: careerhunter-state
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      NTFY_ACCEPTANCE_FILE: reports/ntfy-acceptance.json
+      LLM_PROVIDER: rules
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -e .
+      - name: Require production PostgreSQL
+        shell: bash
+        run: |
+          if [ -z "${DATABASE_URL:-}" ]; then echo 'DATABASE_URL is required; refusing SQLite fallback' >&2; exit 1; fi
+          case "$DATABASE_URL" in postgres://*|postgresql://*|postgresql+psycopg://*) ;; *) echo 'DATABASE_URL must be PostgreSQL' >&2; exit 1 ;; esac
+      - name: Read-only production snapshot
+        id: run
+        shell: bash
+        run: |
+          mkdir -p reports/four-country
+          printf 'status=read_only; collection=owned_by_daily_workflow\n' > reports/four-country/jobs.log
+          printf 'status=read_only; collection=owned_by_daily_workflow\n' > reports/four-country/network.log
+      - name: Export the same database as JSON and browser HTML
+        if: always()
+        shell: bash
+        run: |
+          export_start=$(date +%s)
+          set +e
+          python -m careerhunter.dashboard --output reports/four-country/dashboard.json --limit 500 2>reports/four-country/dashboard.error.log
+          rc=$?
+          set -e
+          echo "dashboard_export_seconds=$(( $(date +%s) - export_start ))" > reports/four-country/timing.log
+          echo "dashboard_export_exit=$rc" >> reports/four-country/timing.log
+          if [ "$rc" -ne 0 ]; then cat reports/four-country/dashboard.error.log >&2; exit "$rc"; fi
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from careerhunter.dashboard import _html_page
+          dashboard_path = Path("reports/four-country/dashboard.json")
+          if not dashboard_path.exists():
+              raise SystemExit("dashboard export did not produce dashboard.json")
+          data = json.loads(dashboard_path.read_text())
+          Path("reports/four-country/dashboard.html").write_text(_html_page(data), encoding="utf-8")
+      - name: Check configured ATS source health
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from careerhunter.source_health import check_catalog
+          rows = check_catalog(timeout=20)
+          Path("reports/four-country/source-health.json").write_text(
+              json.dumps({"commit_sha": "${{ github.sha }}", "sources": rows}, indent=2),
+              encoding="utf-8")
+          print(json.dumps(rows, indent=2))
+          PY
+      - name: Build four-country run summary
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          out = Path("reports/four-country/summary.json")
+          dashboard = Path("reports/four-country/dashboard.json")
+          if not dashboard.exists():
+              raise SystemExit("Dashboard export missing; cannot claim successful verification")
+          data = json.loads(dashboard.read_text())
+          from datetime import datetime, timedelta, timezone
+          jobs = data.get("jobs", [])
+          aggregates = data.get("aggregates", {})
+          country_aggregates = aggregates.get("countries", {})
+          cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+          def parsed_time(value):
+              try:
+                  return datetime.fromisoformat(value.replace("Z", "+00:00"))
+              except (AttributeError, ValueError):
+                  return None
+          new_jobs = {(j.get("source"), j.get("job_id")) for j in jobs if (parsed_time(j.get("first_seen_at")) or datetime.min.replace(tzinfo=timezone.utc)) >= cutoff}
+          countries = {"US": "United States", "AU": "Australia", "GB": "United Kingdom", "TR": "Türkiye"}
+          health = json.loads(Path("reports/four-country/source-health.json").read_text()) if Path("reports/four-country/source-health.json").exists() else {"sources": []}
+          health_rows = health.get("sources", [])
+          rows = {}
+          for code, name in countries.items():
+              matches, unknown = [], []
+              for j in jobs:
+                  assessment = j.get("country_assessments", {}).get(name, {})
+                  dims = assessment.get("dimensions", {})
+                  status = assessment.get("status", "unknown")
+                  # A country count requires explicit location/remote evidence;
+                  # generic worldwide/remote rows remain visible as unknown.
+                  evidenced = dims.get("physical_location") == "mentioned" or dims.get("remote_from_turkey") == "explicit"
+                  if evidenced:
+                      matches.append((j, assessment))
+                  else:
+                      unknown.append(j)
+              sources = [s for s in health_rows if code in (s.get("countries") or [])]
+              errors = [f"{s.get('source_id')}: {s.get('error')}" for s in sources if s.get("status") != "success"]
+              total = country_aggregates.get(name, {}).get("total", 0)
+              recent = country_aggregates.get(name, {}).get("new_24h", 0)
+              if not 0 <= recent <= total:
+                  raise ValueError(f"Inconsistent {code} counts: new={recent}, total={total}")
+              rows[code] = {
+                  "attempted_sources": len(sources),
+                  "successful_sources": sum(1 for s in sources if s.get("status") == "success"),
+                  "seen": total, "unknown_location_jobs": len(unknown),
+                  "new": recent, "profile_fit": sum(1 for j, _ in matches if (j.get("fit_score", j.get("match_score", 0)) or 0) >= 60),
+                  "turkey_eligible": sum(1 for _, a in matches if a.get("dimensions", {}).get("remote_from_turkey") == "explicit"),
+                  "sponsorship": sum(1 for _, a in matches if a.get("status") == "sponsorship_or_rights_evidence"),
+                  "source_errors": errors,
+              }
+          payload = {"mode": "read_only", "country_count_scope": "declared_job_location_not_work_authorization", "country_counts_allow_multi_match": True, "commit_sha": "${{ github.sha }}", "snapshot_at": data.get("snapshot_at"), "snapshot_id": data.get("snapshot_id"), "countries": rows, "jobs": aggregates.get("total", len(jobs)), "new_24h": aggregates.get("new_24h", 0), "displayed_jobs": len(jobs), "people": len(data.get("contacts", [])), "drafts": sum(bool(c.get("message_variant_a") or c.get("message_variant_a_tr")) for c in data.get("contacts", [])), "ntfy_acceptance": "reports/ntfy-acceptance.json", "phone_delivery_claim": False}
+          out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+          print(json.dumps(payload, indent=2))
+          PY
+          cat reports/four-country/summary.json >> "$GITHUB_STEP_SUMMARY"
+          if [ -f reports/ntfy-acceptance.json ]; then cat reports/ntfy-acceptance.json >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Upload four-country artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: four-country-verification-${{ github.run_id }}
+          path: |
+          reports/four-country/summary.json
+          reports/four-country/source-health.json
+          reports/four-country/timing.log
+          retention-days: 14
