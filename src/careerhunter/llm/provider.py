@@ -178,7 +178,7 @@ def create_provider() -> LLMProvider | None:
         base = base or "https://integrate.api.nvidia.com/v1"
         key = (os.getenv("NVIDIA_API_KEY", "") or key
                or os.getenv("NVIDIA_SUPER_API_KEY", ""))
-        model = model or "nvidia/nemotron-3-super-120b-a12b"
+        model = model or "nvidia/nemotron-3.5-super-vl-120b-a12b"
         primary = OpenAICompatibleProvider(base, key, model, nvidia=True) if key else None
         fallback_key = os.getenv("NVIDIA_ULTRA_API_KEY", "")
         if primary and fallback_key and os.getenv("NVIDIA_ENABLE_FALLBACK") == "true":
