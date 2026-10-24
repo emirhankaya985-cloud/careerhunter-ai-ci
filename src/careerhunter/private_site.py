@@ -18,7 +18,8 @@ from urllib.parse import parse_qs
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from itsdangerous import BadSignature, URLSafeTimedSerializer
-from sqlalchemy import create_engine, func, or_, select
+from sqlalchemy import Integer, cast, create_engine, func, or_, select
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.engine import Engine
 
@@ -139,8 +140,20 @@ def _repo() -> DatabaseRepository:
     return repo
 
 
-def _job_rows(page: int, query: str, limit: int = 40) -> tuple[list[Job], bool]:
-    stmt = select(jobs.c.payload).order_by(jobs.c.last_verified_at.desc())
+def _job_rows(page: int, query: str, limit: int = 40,
+              order: str = "fit") -> tuple[list[Job], bool]:
+    stmt = select(jobs.c.payload)
+    if order == "fit":
+        # JSON is stored in TEXT for SQLite/PostgreSQL portability.
+        # Extract scores inside SQL: paging must happen after sorting.
+        if _get_engine().dialect.name == "postgresql":
+            score = cast(func.jsonb_extract_path_text(
+                cast(jobs.c.payload, JSONB), "match_score"), Integer)
+        else:
+            score = cast(func.json_extract(jobs.c.payload, "$.match_score"), Integer)
+        stmt = stmt.order_by(score.desc().nullslast(), jobs.c.last_verified_at.desc())
+    else:
+        stmt = stmt.order_by(jobs.c.last_verified_at.desc())
     if query:
         escaped = (
             query.casefold().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -157,7 +170,7 @@ def _job_rows(page: int, query: str, limit: int = 40) -> tuple[list[Job], bool]:
     return [Job.model_validate_json(value) for value in values[:limit]], len(values) > limit
 
 
-def _panel_data(view: str, query: str, page: int) -> dict:
+def _panel_data(view: str, query: str, page: int, order: str = "fit") -> dict:
     repo = _repo()
     from datetime import timedelta
     from .models import utc_now
@@ -179,7 +192,8 @@ def _panel_data(view: str, query: str, page: int) -> dict:
     ]
     rows, next_page = _job_rows(page if view == "jobs" else 1,
                                 query if view == "jobs" else "",
-                                limit=40 if view == "jobs" else 8) if view != "people" else ([], False)
+                                limit=40 if view == "jobs" else 8,
+                                order=order if view == "jobs" else "recent") if view != "people" else ([], False)
     return {
         "view": view,
         "heading": {"overview": "Kariyer kontrol merkezi", "jobs": "İş fırsatları",
@@ -193,6 +207,7 @@ def _panel_data(view: str, query: str, page: int) -> dict:
         "countries": countries, "people": people if view == "people" else [],
         "latest": repo.latest_run() if view == "overview" else None,
         "job_rows": rows, "has_next": next_page, "page": page, "query": query,
+        "sort": order,
     }
 
 
@@ -312,8 +327,11 @@ def home(request: Request):
         page = min(max(int(request.query_params.get("page", "1")), 1), 1000)
     except ValueError:
         page = 1
+    order = request.query_params.get("sort", "fit")
+    if order not in {"fit", "recent"}:
+        order = "fit"
     try:
-        return HTMLResponse(render_dashboard(**_panel_data(view, q, page)))
+        return HTMLResponse(render_dashboard(**_panel_data(view, q, page, order)))
     except Exception as exc:
         # Never disclose DB URLs, SQL or person records to the browser.
         logger.error("Owner dashboard query failed (%s)", type(exc).__name__)
