@@ -112,3 +112,34 @@ def test_nvidia_enrichment_requires_exact_backfill_workflow(client, monkeypatch)
     assert result.status_code == 200
     assert result.json()["mode"] == "ai"
     assert len(started) == 1
+
+
+def test_nvidia_probe_is_exact_oidc_protected_and_uses_synthetic_data(client, monkeypatch):
+    from careerhunter.llm.provider import JobAnalysis
+    monkeypatch.setenv("CAREERHUNTER_OIDC_COLLECTOR", "true")
+    monkeypatch.setattr(scan._jwks, "get_signing_key_from_jwt",
+                        lambda token: SimpleNamespace(key="fixture-public-key"))
+    identity = claims()
+    monkeypatch.setattr(scan.jwt, "decode", lambda *args, **kwargs: dict(identity))
+    headers = {"Authorization": "Bearer head.payload.signature"}
+    assert client.post("/internal/nvidia-smoke").status_code == 401
+    assert client.post("/internal/nvidia-smoke", headers=headers).status_code == 403
+    identity["workflow_ref"] = scan.SMOKE_WORKFLOW
+    monkeypatch.setenv("LLM_PROVIDER", "nvidia")
+    monkeypatch.setenv("NVIDIA_API_KEY", "fake-test-nvidia")
+    monkeypatch.setenv("LLM_MODEL", "nvidia/nemotron-3-super-120b-a12b")
+    seen = []
+    class FakeProvider:
+        model = "nvidia/nemotron-3-super-120b-a12b"
+        def analyze_job(self, profile, text):
+            seen.append((profile, text))
+            return JobAnalysis(
+                technical_fit=28, experience_fit=24, career_fit=19,
+                remote_fit=8, freshness=9, turkey_eligibility="unknown")
+    monkeypatch.setattr("careerhunter.llm.provider.create_provider", lambda: FakeProvider())
+    result = client.post("/internal/nvidia-smoke", headers=headers)
+    assert result.status_code == 200
+    assert result.json()["status"] == "success"
+    assert result.json()["model"] == "nvidia/nemotron-3-super-120b-a12b"
+    assert seen[0][0]["target_roles"] == ["Junior Python Developer"]
+    assert "example.com" not in seen[0][1]
