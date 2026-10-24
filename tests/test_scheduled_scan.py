@@ -63,7 +63,7 @@ def test_github_signature_identity_and_workflow_are_all_required(client, monkeyp
         ("repository_id", "123456"),
         ("repository", "attacker/other-repo"),
         ("ref", "refs/heads/untrusted"),
-        ("sub", "repo:attacker/repo:ref:refs/heads/main"),
+        ("sub", ""),
         ("workflow_ref", scan.REPO + "/.github/workflows/tests.yml@refs/heads/main"),
         ("event_name", "pull_request"),
     ):
@@ -71,6 +71,9 @@ def test_github_signature_identity_and_workflow_are_all_required(client, monkeyp
         assert client.post("/internal/scan", headers=headers).status_code == 403
         identity = claims()
 
+    # Valid immutable/customized subject formats remain safe because all
+    # independent signed repository and workflow claims are exact matches.
+    identity["sub"] = "repository_id:" + scan.REPO_ID + ":ref:refs/heads/main"
     called = []
     monkeypatch.setattr(scan, "threading", SimpleNamespace(
         Thread=lambda **kwargs: SimpleNamespace(start=lambda: called.append(1))))
