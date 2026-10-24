@@ -223,6 +223,27 @@ class DatabaseRepository:
                 ))
         return new_count
 
+    def update_job_scores(self, rescored: list[Job]) -> int:
+        """Refresh matching evidence without mutating first-seen or job status.
+
+        Unlike upsert_jobs, this leaves verified timestamps, closure flags and
+        new-job counters intact. It is safe for backfills and LLM enrichment.
+        """
+        if not rescored:
+            return 0
+        modified = 0
+        with self.engine.begin() as connection:
+            for job in rescored:
+                payload, digest = self._job_payload(job)
+                result = connection.execute(
+                    update(jobs).where(
+                        jobs.c.source == job.source,
+                        jobs.c.job_id == job.job_id,
+                    ).values(payload=payload, content_hash=digest)
+                )
+                modified += result.rowcount or 0
+        return modified
+
     def mark_closed(self, source: str, company: str, seen_ids: set[str]) -> int:
         """Close missing jobs only after the caller completed a successful source scan."""
         with self.engine.begin() as connection:
