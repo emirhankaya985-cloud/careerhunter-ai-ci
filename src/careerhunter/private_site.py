@@ -91,12 +91,44 @@ def _authenticated(request: Request) -> bool:
         return False
 
 
+def _bootstrap_fresh_schema_if_requested(database_url: str) -> None:
+    """Explicit one-time setup for an entirely empty Render PostgreSQL database.
+
+    Never migrate or write to an existing database. Disable the flag after setup.
+    The normal dashboard engine remains read-only.
+    """
+    if os.environ.get("DASHBOARD_BOOTSTRAP_SCHEMA") != "true":
+        return
+    if not database_url.startswith("postgresql+psycopg://"):
+        raise RuntimeError("Schema bootstrap requires PostgreSQL")
+    from sqlalchemy import inspect, insert
+    from .database import metadata, schema_versions, SCHEMA_VERSION
+    from .models import utc_now
+
+    bootstrap_engine = create_engine(database_url, pool_pre_ping=True)
+    try:
+        with bootstrap_engine.begin() as connection:
+            if inspect(connection).get_table_names():
+                logger.info("Schema bootstrap skipped: database is not empty")
+                return
+            metadata.create_all(connection)
+            connection.execute(insert(schema_versions).values(
+                version=SCHEMA_VERSION, applied_at=utc_now().isoformat()
+            ))
+            logger.info("Fresh CareerHunter PostgreSQL schema initialized")
+    finally:
+        bootstrap_engine.dispose()
+
+
 @lru_cache(maxsize=1)
 def _get_engine() -> Engine:
     url = _settings()[2]
     # Intentionally do NOT call DatabaseRepository.__init__/initialize:
     # those methods create tables and write schema migration records.
-    return create_engine(url, pool_pre_ping=True, pool_size=3, max_overflow=0)
+    connect_args = ({"options": "-c default_transaction_read_only=on"}
+                    if url.startswith("postgresql+psycopg://") else {})
+    return create_engine(url, pool_pre_ping=True, pool_size=3, max_overflow=0,
+                         connect_args=connect_args)
 
 
 def _repo() -> DatabaseRepository:
@@ -165,7 +197,8 @@ def _panel_data(view: str, query: str, page: int) -> dict:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    _settings()  # Fail closed if secrets are absent.
+    settings = _settings()  # Fail closed if secrets are absent.
+    _bootstrap_fresh_schema_if_requested(settings[2])
     yield
     if _get_engine.cache_info().currsize:
         _get_engine().dispose()
