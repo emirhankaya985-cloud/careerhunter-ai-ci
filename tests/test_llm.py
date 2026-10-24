@@ -139,8 +139,6 @@ def test_nvidia_public_key_enables_trial_model_without_fallback(monkeypatch):
 
 
 def test_nvidia_sends_nonreasoning_json_and_stops_after_rate_limit(httpx_mock):
-    import httpx
-    from careerhunter.llm.provider import configured_provider
     provider = OpenAICompatibleProvider(
         "https://integrate.api.nvidia.com/v1", "dummy", "nvidia/nemotron-3.5-lightning-30b-a3b",
         Budget(max_calls=3), nvidia=True
