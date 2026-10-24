@@ -24,3 +24,43 @@ def rescore_existing(url: str, *, batch_size: int = 100) -> int:
         return total
     finally:
         repo.engine.dispose()
+
+
+def enrich_best_existing(url: str, *, limit: int = 8) -> int:
+    """Add NVIDIA semantic analysis to a tiny, bounded set of top-ranked jobs.
+
+    Only use explicitly configured provider credentials. Never submit all
+    historic jobs to the public trial endpoint; rule scores remain the fallback.
+    """
+    from .agents.ai_job_matcher import AIJobMatcher
+    from .llm.provider import create_provider, configured_provider
+
+    if configured_provider() != "nvidia":
+        raise RuntimeError("NVIDIA Build API key is not configured in Render")
+    provider = create_provider()
+    if provider is None:
+        raise RuntimeError("NVIDIA provider unavailable")
+    repo = DatabaseRepository(url)
+    try:
+        jobs = repo.list_jobs(active_only=True, limit=10000)
+        eligible = [
+            j for j in jobs
+            if (j.match_score or 0) >= 65
+            and j.eligibility_status != "ineligible"
+            and j.match_method != "llm"
+        ]
+        eligible.sort(key=lambda job: job.match_score or 0, reverse=True)
+        from os import getenv
+        max_calls = max(0, int(getenv("MAX_DAILY_LLM_CALLS", "8")))
+        selected = eligible[:min(limit, max_calls)]
+        matcher = AIJobMatcher(provider, load_match_profile())
+        updated = []
+        for job in selected:
+            matcher.enrich(job)
+            if job.match_method == "llm":
+                updated.append(job)
+        if not updated:
+            raise RuntimeError("NVIDIA returned no valid AI analyses")
+        return repo.update_job_scores(updated)
+    finally:
+        repo.engine.dispose()
