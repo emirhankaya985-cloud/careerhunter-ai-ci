@@ -223,3 +223,55 @@ def test_person_template_escapes_unsafe_contact_links():
     assert 'href="data:' not in html
     assert html.count('href="#"') >= 2
 
+
+
+def test_bootstrap_only_runs_with_explicit_flag_and_empty_database(tmp_path, monkeypatch):
+    import careerhunter.private_site as site
+    from sqlalchemy import create_engine, inspect, text
+
+    db_path = tmp_path / "fresh-schema.db"
+    sqlite_url = f"sqlite:///{db_path}"
+    # The fake engine confines the test to a local SQLite fixture. Production
+    # bootstrap rejects SQLite and only accepts an explicitly configured PG URL.
+    monkeypatch.setattr(site, "create_engine", lambda _url, **_kw: create_engine(sqlite_url))
+    monkeypatch.delenv("DASHBOARD_BOOTSTRAP_SCHEMA", raising=False)
+    site._bootstrap_fresh_schema_if_requested("postgresql+psycopg://test-user@db/test")
+    assert not db_path.exists()
+
+    monkeypatch.setenv("DASHBOARD_BOOTSTRAP_SCHEMA", "true")
+    with pytest.raises(RuntimeError, match="PostgreSQL"):
+        site._bootstrap_fresh_schema_if_requested(sqlite_url)
+
+    site._bootstrap_fresh_schema_if_requested("postgresql+psycopg://test-user@db/test")
+    engine = create_engine(sqlite_url)
+    try:
+        with engine.begin() as con:
+            tables = set(inspect(con).get_table_names())
+            assert {"jobs", "contacts", "runs", "schema_versions"} <= tables
+            assert con.execute(text("SELECT version FROM schema_versions")).scalar_one() == 3
+            con.execute(text("CREATE TABLE manually_added (id INTEGER)"))
+        site._bootstrap_fresh_schema_if_requested("postgresql+psycopg://test-user@db/test")
+        with engine.connect() as con:
+            assert "manually_added" in inspect(con).get_table_names()
+            assert con.execute(text("SELECT COUNT(*) FROM schema_versions")).scalar_one() == 1
+    finally:
+        engine.dispose()
+
+
+def test_postgres_dashboard_connections_are_transaction_read_only(monkeypatch):
+    import careerhunter.private_site as site
+
+    calls = []
+    marker = object()
+    monkeypatch.setattr(site, "_settings", lambda: (
+        "valid-16-character-password", "long-session-secret-placeholder",
+        "postgresql+psycopg://reader:password@host/db", True
+    ))
+    monkeypatch.setattr(site, "create_engine", lambda url, **kwargs:
+                        calls.append((url, kwargs)) or marker)
+    site._get_engine.cache_clear()
+    try:
+        assert site._get_engine() is marker
+        assert calls[0][1]["connect_args"]["options"] == "-c default_transaction_read_only=on"
+    finally:
+        site._get_engine.cache_clear()
