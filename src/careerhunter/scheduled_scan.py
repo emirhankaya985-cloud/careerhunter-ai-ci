@@ -132,7 +132,14 @@ def start_scan(request: Request) -> dict[str, object]:
 
 @router.get("/internal/scan/status")
 def scan_status(request: Request) -> dict[str, object]:
-    _require_github_oidc(request)
+    # Read-only status is permitted for either independently verified workflow.
+    # The collect and rescore POST endpoints keep their distinct authorizations.
+    try:
+        _require_github_oidc(request)
+    except HTTPException as exc:
+        if exc.status_code != 403:
+            raise
+        _require_github_oidc(request, workflow=RESCORE_WORKFLOW)
     with _lock:
         return dict(_state)
 
