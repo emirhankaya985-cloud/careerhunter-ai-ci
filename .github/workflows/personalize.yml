@@ -9,9 +9,6 @@ on:
         type: choice
         default: rules
         options: [rules, ai]
-  push:
-    paths:
-      - .github/workflows/personalize.yml
 
 permissions:
   contents: read
