@@ -13,7 +13,7 @@ import sys
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from render_scan_client import call
+from .render_scan_client import call
 
 _TOKEN = re.compile(r"^[0-9]{6,15}:[A-Za-z0-9_-]{25,}$")
 _CHAT = re.compile(r"^-?[0-9]{4,20}$")
