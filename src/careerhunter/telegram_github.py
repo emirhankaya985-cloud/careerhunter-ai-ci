@@ -75,6 +75,73 @@ def send(text: str, buttons: list[dict] | None = None) -> bool:
         return False
 
 
+
+
+def diagnose_connection() -> bool:
+    """Test the actual token's bot identity and exact chat access, without leaks.
+
+    Return diagnostic booleans and public bot username only. Never output chat ID,
+    token, Telegram response bodies or private sender information.
+    """
+    if not configured():
+        print("DIAG: token_or_chat_secret_invalid")
+        return False
+    token = os.environ["TELEGRAM_BOT_TOKEN"].strip()
+    chat = os.environ["TELEGRAM_CHAT_ID"].strip()
+
+    def bot_api(method: str, body: dict | None = None) -> tuple[int, dict]:
+        req = Request(
+            "https://api.telegram.org/bot" + token + "/" + method,
+            method="POST",
+            data=json.dumps(body or {}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urlopen(req, timeout=16) as response:
+                return response.status, json.load(response)
+        except HTTPError as exc:
+            # Error payloads may be sensitive. Do not print them.
+            return exc.code, {}
+        except (URLError, TimeoutError, OSError, ValueError):
+            return 0, {}
+
+    code, who = bot_api("getMe")
+    if code != 200 or who.get("ok") is not True:
+        print("DIAG: token_getMe_failed HTTP", code)
+        return False
+    public_username = str((who.get("result") or {}).get("username") or "")
+    safe_username = re.sub(r"[^A-Za-z0-9_]", "", public_username)[:64]
+    print("DIAG: authenticated_bot_username=@" + safe_username)
+
+    chat_code, chat_data = bot_api("getChat", {"chat_id": chat})
+    print("DIAG: configured_chat_getChat_http=" + str(chat_code))
+    if chat_code == 200 and chat_data.get("ok") is True:
+        print("DIAG: bot_can_access_configured_chat=true")
+        return True
+
+    updates_code, updates_data = bot_api("getUpdates", {"limit": 100, "timeout": 0,
+                                                       "allowed_updates": ["message"]})
+    print("DIAG: bot_getUpdates_http=" + str(updates_code))
+    if updates_code == 200 and updates_data.get("ok") is True:
+        recent = [
+            event.get("message", {})
+            for event in updates_data.get("result", [])
+            if isinstance(event, dict)
+        ]
+        started_chats = {
+            str(message.get("chat", {}).get("id"))
+            for message in recent
+            if isinstance(message, dict) and
+               str(message.get("text", "")).startswith("/start") and
+               isinstance(message.get("chat"), dict) and
+               message.get("chat", {}).get("type") == "private"
+        }
+        print("DIAG: private_start_message_seen=" +
+              ("true" if bool(started_chats) else "false"))
+        print("DIAG: configured_chat_matches_private_start=" +
+              ("true" if chat in started_chats else "false"))
+    return False
+
 def html_safe(value: object, maxlen: int = 90) -> str:
     return html.escape(" ".join(str(value or "").split())[:maxlen], quote=True)
 
@@ -120,6 +187,8 @@ def main() -> int:
     if not configured():
         print("NOT_CONFIGURED: GitHub Secrets TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID missing or invalid")
         return 1 if ("--test" in args or "--failure" in args) else 0
+    if "--diagnose" in args:
+        return 0 if diagnose_connection() else 1
     if "--test" in args:
         accepted = send(
             "✅ <b>CareerHunter AI bağlandı!</b>\n"
