@@ -1,12 +1,8 @@
 name: Daily Career Intelligence
 
-# A 09:17 Turkey time scheduled run with a zero-secret identity token.
-# Render owns the DB URL; the runner only requests a short-lived GitHub OIDC token.
+# Scheduled job runner needs no Bot token and no PostgreSQL password.
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - .github/workflows/daily.yml
   schedule:
     - cron: '17 6 * * *'
 
@@ -30,16 +26,3 @@ jobs:
       - name: Collect real job postings in Render PostgreSQL
         shell: bash
         run: python src/careerhunter/render_scan_client.py
-
-      - name: Telegram daily top matches (secrets stay in GitHub)
-        if: success()
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: PYTHONPATH=src python -m careerhunter.telegram_github --digest
-      - name: Telegram alert if collection fails
-        if: failure()
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: PYTHONPATH=src python -m careerhunter.telegram_github --failure
