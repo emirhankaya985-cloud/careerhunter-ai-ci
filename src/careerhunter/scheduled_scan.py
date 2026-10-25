@@ -27,6 +27,7 @@ WORKFLOW = REPO + "/.github/workflows/daily.yml@refs/heads/main"
 RESCORE_WORKFLOW = REPO + "/.github/workflows/personalize.yml@refs/heads/main"
 SMOKE_WORKFLOW = REPO + "/.github/workflows/nvidia-smoke.yml@refs/heads/main"
 TELEGRAM_SMOKE_WORKFLOW = REPO + "/.github/workflows/telegram-smoke.yml@refs/heads/main"
+TELEGRAM_REPORT_WORKFLOW = REPO + "/.github/workflows/telegram-report.yml@refs/heads/main"
 JWK_URL = ISSUER + "/.well-known/jwks"
 _jwks = PyJWKClient(JWK_URL, cache_jwk_set=True, lifespan=3600, timeout=10)
 _lock = threading.Lock()
@@ -35,7 +36,8 @@ _state: dict[str, object] = {"status": "idle"}
 router = APIRouter()
 
 
-def _require_github_oidc(request: Request, *, workflow: str = WORKFLOW) -> None:
+def _require_github_oidc(request: Request, *, workflow: str = WORKFLOW,
+                         events: frozenset[str] | None = None) -> None:
     """Verify the signature AND immutable repository/workflow identity."""
     if os.getenv("CAREERHUNTER_OIDC_COLLECTOR") != "true":
         raise HTTPException(status_code=404, detail="Not found")
@@ -76,7 +78,8 @@ def _require_github_oidc(request: Request, *, workflow: str = WORKFLOW) -> None:
     if mismatched:
         logger.warning("GitHub OIDC claim mismatch fields: %s", ",".join(mismatched))
         raise HTTPException(status_code=403, detail="Workflow not authorized")
-    if claims.get("event_name") not in {"schedule", "workflow_dispatch", "push"}:
+    valid_events = events if events is not None else {"schedule", "workflow_dispatch", "push"}
+    if claims.get("event_name") not in valid_events:
         raise HTTPException(status_code=403, detail="Event not authorized")
 
 
@@ -327,7 +330,8 @@ def telegram_digest(request: Request) -> dict[str, object]:
     GitHub hosts the Telegram token. Render hosts PostgreSQL. Neither system
     needs the other system's credentials. No contact or CV data is returned.
     """
-    _require_github_oidc(request, workflow=WORKFLOW)
+    _require_github_oidc(request, workflow=TELEGRAM_REPORT_WORKFLOW,
+                         events=frozenset({"workflow_run"}))
     from sqlalchemy import select
     from .database import jobs as jobs_table, runs as runs_table
     from .models import Job
