@@ -318,3 +318,58 @@ def telegram_smoke(request: Request) -> dict[str, object]:
     if not is_configured():
         return {"status": "not_configured"}
     return {"status": "accepted" if publish_connection_test() else "send_failed"}
+
+
+@router.get("/internal/telegram/digest")
+def telegram_digest(request: Request) -> dict[str, object]:
+    """Return only public job metadata for the signed daily GitHub workflow.
+
+    GitHub hosts the Telegram token. Render hosts PostgreSQL. Neither system
+    needs the other system's credentials. No contact or CV data is returned.
+    """
+    _require_github_oidc(request, workflow=WORKFLOW)
+    from sqlalchemy import select
+    from .database import jobs as jobs_table, runs as runs_table
+    from .models import Job
+    from .private_site import _get_engine
+    from .notifications.telegram import _get_relevant
+
+    with _get_engine().connect() as connection:
+        latest = connection.execute(
+            select(runs_table)
+            .where(runs_table.c.slot == "jobs")
+            .order_by(runs_table.c.id.desc())
+            .limit(1)
+        ).mappings().first()
+        if not latest or latest["status"] != "success":
+            return {"status": "no_successful_scan", "items": []}
+        rows = connection.execute(
+            select(jobs_table.c.payload)
+            .where(jobs_table.c.first_seen_at >= latest["started_at"])
+            .where(jobs_table.c.closed_at.is_(None))
+            .order_by(jobs_table.c.first_seen_at.desc())
+            .limit(2500)
+        ).scalars().all()
+    try:
+        threshold = max(0, min(100, int(os.getenv("TELEGRAM_MIN_SCORE", "75"))))
+    except ValueError:
+        threshold = 75
+    matched = _get_relevant((Job.model_validate_json(raw) for raw in rows),
+                             minimum=threshold)
+    items = [{
+        "title": job.title[:90],
+        "company": job.company[:70],
+        "location": job.location[:70],
+        "url": str(job.job_url),
+        "score": int(job.match_score or 0),
+        "method": job.match_method,
+        "eligibility": job.eligibility_status,
+    } for job in matched[:3]]
+    return {
+        "status": "ready",
+        "run_id": int(latest["id"]),
+        "jobs_new": int(latest["jobs_new"] or 0),
+        "strong_count": len(matched),
+        "threshold": threshold,
+        "items": items,
+    }
