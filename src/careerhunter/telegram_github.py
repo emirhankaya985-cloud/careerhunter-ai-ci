@@ -104,10 +104,10 @@ def digest_message(data: dict) -> tuple[str, list[dict]] | None:
 
 
 def main() -> int:
-    if not configured():
-        print("SKIP: GitHub Secrets TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not configured")
-        return 0
     args = set(sys.argv[1:])
+    if not configured():
+        print("NOT_CONFIGURED: GitHub Secrets TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID missing or invalid")
+        return 1 if ("--test" in args or "--failure" in args) else 0
     if "--test" in args:
         accepted = send(
             "✅ <b>CareerHunter AI bağlandı!</b>\n"
