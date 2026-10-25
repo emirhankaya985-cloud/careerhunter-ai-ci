@@ -55,8 +55,20 @@ def send(text: str, buttons: list[dict] | None = None) -> bool:
         receipt = (reply.get("result") or {}).get("message_id")
         return reply.get("ok") is True and isinstance(receipt, int) and receipt > 0
     except HTTPError as exc:
-        # Never print HTTPError itself: it contains the full URL incl. bot token.
-        print(f"Telegram returned HTTP {exc.code}; check token, chat ID and /start")
+        # Never print the exception, URL, response JSON, chat ID or token.
+        # Telegram error descriptions can contain arbitrary data, so permit
+        # only a narrow, known diagnostic label.
+        try:
+            detail = json.loads(exc.read(2048)).get("description", "").casefold()
+        except (ValueError, TypeError, AttributeError):
+            detail = ""
+        reason = ("chat_not_found" if "chat not found" in detail else
+                  "bot_not_started_or_blocked" if "bot was blocked" in detail or
+                  "bot can\u2019t initiate" in detail or "bot can't initiate" in detail else
+                  "invalid_chat_id" if "chat_id" in detail else
+                  "telegram_format_error" if "parse entities" in detail else
+                  "unknown")
+        print(f"Telegram HTTP {exc.code}; safe_failure_reason={reason}")
         return False
     except (URLError, TimeoutError, ValueError, KeyError, TypeError, OSError):
         print("Telegram transport failed; sensitive details not printed")
