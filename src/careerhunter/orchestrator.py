@@ -52,7 +52,7 @@ class Orchestrator:
             if not dry_run:
                 self.repo.record_run(stats)
                 publish_run(stats)
-                if slot == "jobs":
+                if slot == "jobs" and os.getenv("TELEGRAM_DELIVERY_MODE", "render") != "github":
                     if stats.status == "success":
                         publish_daily_digest(stats, self._telegram_candidates)
                     else:
