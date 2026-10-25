@@ -36,10 +36,10 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python src/careerhunter/telegram_github.py --digest
+        run: PYTHONPATH=src python -m careerhunter.telegram_github --digest
       - name: Telegram alert if collection fails
         if: failure()
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python src/careerhunter/telegram_github.py --failure
+        run: PYTHONPATH=src python -m careerhunter.telegram_github --failure
