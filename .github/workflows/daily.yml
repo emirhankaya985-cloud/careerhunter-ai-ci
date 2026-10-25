@@ -30,3 +30,16 @@ jobs:
       - name: Collect real job postings in Render PostgreSQL
         shell: bash
         run: python src/careerhunter/render_scan_client.py
+
+      - name: Telegram daily top matches (secrets stay in GitHub)
+        if: success()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python src/careerhunter/telegram_github.py --digest
+      - name: Telegram alert if collection fails
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python src/careerhunter/telegram_github.py --failure
