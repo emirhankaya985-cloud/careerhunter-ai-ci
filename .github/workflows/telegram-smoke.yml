@@ -5,29 +5,18 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
-  verify:
+  send-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Verify owner Telegram delivery without exposing credentials
-        shell: bash
-        run: |
-          python - <<'PY'
-          import sys
-          sys.path.insert(0, "src")
-          from careerhunter.render_scan_client import wait_ready, call
-
-          wait_ready()
-          result = call("/internal/telegram-smoke", method="POST")
-          print("Telegram smoke:", result["status"])
-          if result["status"] != "accepted":
-              raise SystemExit("FAIL: Telegram notification not accepted")
-          print("PASS: private Telegram sendMessage acknowledged")
-          PY
+      - name: Send one test message from GitHub Secrets
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python src/careerhunter/telegram_github.py --test
