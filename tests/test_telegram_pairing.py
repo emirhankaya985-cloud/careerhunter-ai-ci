@@ -27,6 +27,7 @@ def setup(monkeypatch, updates, *, webhook=""):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", TOKEN)
     monkeypatch.setenv("TELEGRAM_CHAT_ID", OWNER)
     calls = []
+    acknowledged = {"offset": None}
 
     def fake_urlopen(request, timeout=20):
         import urllib.parse
@@ -36,9 +37,11 @@ def setup(monkeypatch, updates, *, webhook=""):
         if method == "getWebhookInfo":
             return Response({"ok": True, "result": {"url": webhook}})
         if method == "getUpdates":
-            return Response({"ok": True, "result": (
-                [] if params.get("offset") else updates
-            )})
+            if params.get("offset") is not None:
+                acknowledged["offset"] = params["offset"]
+            pending = [entry for entry in updates if acknowledged["offset"] is None
+                       or entry["update_id"] >= acknowledged["offset"]]
+            return Response({"ok": True, "result": pending})
         if method == "sendMessage":
             return Response({"ok": True, "result": {"message_id": 125}})
         raise AssertionError("Unexpected Bot API method")
