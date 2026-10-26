@@ -142,6 +142,92 @@ def diagnose_connection() -> bool:
               ("true" if chat in started_chats else "false"))
     return False
 
+
+
+def pair_owner_from_start() -> bool:
+    """One-time owner pairing from private /start with the configured Chat ID.
+
+    The bot cannot start a private chat itself. Poll only for messages whose
+    Telegram-authenticated sender and private chat BOTH match the authorized
+    numeric GitHub Secret, then acknowledge the update after Telegram confirms
+    receipt. Never print IDs, tokens or third-party message contents.
+    """
+    if not configured():
+        print("PAIR: waiting_for_github_secrets")
+        return False
+    token = os.environ["TELEGRAM_BOT_TOKEN"].strip()
+    authorized = os.environ["TELEGRAM_CHAT_ID"].strip()
+
+    def api(method: str, body: dict) -> dict | None:
+        req = Request(
+            "https://api.telegram.org/bot" + token + "/" + method,
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urlopen(req, timeout=20) as response:
+                result = json.load(response)
+            return result if result.get("ok") is True else None
+        except (HTTPError, URLError, TimeoutError, ValueError, OSError, TypeError):
+            # Never print the exception, which may contain the secret URL.
+            return None
+
+    # Never disable a webhook configured for another service.
+    webhook = api("getWebhookInfo", {})
+    if webhook is None:
+        print("PAIR: bot_api_unavailable")
+        return False
+    if (webhook.get("result") or {}).get("url"):
+        print("PAIR: existing_webhook_controls_updates")
+        return False
+
+    updates = api("getUpdates", {
+        "limit": 100, "timeout": 0, "allowed_updates": ["message"],
+    })
+    if updates is None:
+        print("PAIR: no_access_to_bot_updates")
+        return False
+    relevant = []
+    for entry in updates.get("result", []):
+        if not isinstance(entry, dict):
+            continue
+        message = entry.get("message")
+        if not isinstance(message, dict):
+            continue
+        chat = message.get("chat") or {}
+        sender = message.get("from") or {}
+        update_id = entry.get("update_id")
+        if (chat.get("type") == "private"
+                and str(chat.get("id")) == authorized
+                and str(sender.get("id")) == authorized
+                and not sender.get("is_bot")
+                and isinstance(update_id, int)
+                and re.match(r"^/start(?:@\w+)?(?:\s|$)", str(message.get("text", "")))):
+            relevant.append(update_id)
+
+    if not relevant:
+        print("PAIR: no_authorized_private_start_yet")
+        return False
+
+    delivered = send(
+        "✅ <b>CareerHunter AI | Telegram bağlantısı doğrulandı</b>\n"
+        "🎯 Kişisel iş ilanı bildirimlerin bu özel sohbete gönderilecektir.\n"
+        "🔐 Chat ID eşleşmesi Bot API üzerinden doğrulandı.",
+        [{"text": "📊 Kariyer paneli", "url": _DASHBOARD}],
+    )
+    if not delivered:
+        print("PAIR: authorized_chat_message_failed")
+        return False
+
+    # Consume only up to the matched command. Never acknowledge before a
+    # positive Telegram message receipt; failed sends stay recoverable.
+    confirmed = api("getUpdates", {"offset": max(relevant) + 1, "limit": 1,
+                                    "timeout": 0})
+    print("PAIR: success; telegram_positive_message_id=true")
+    print("PAIR: start_update_acknowledged=" + str(confirmed is not None).lower())
+    return True
+
 def html_safe(value: object, maxlen: int = 90) -> str:
     return html.escape(" ".join(str(value or "").split())[:maxlen], quote=True)
 
@@ -187,6 +273,9 @@ def main() -> int:
     if not configured():
         print("NOT_CONFIGURED: GitHub Secrets TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID missing or invalid")
         return 1 if ("--test" in args or "--failure" in args) else 0
+    if "--pair" in args:
+        pair_owner_from_start()
+        return 0
     if "--diagnose" in args:
         return 0 if diagnose_connection() else 1
     if "--test" in args:
