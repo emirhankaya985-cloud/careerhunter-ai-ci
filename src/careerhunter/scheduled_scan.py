@@ -333,7 +333,7 @@ def telegram_digest(request: Request) -> dict[str, object]:
     """
     _require_github_oidc(
         request, workflow=TELEGRAM_REPORT_WORKFLOW,
-        events=frozenset({"workflow_run"}),
+        events=frozenset({"workflow_run", "push"}),
     )
     from sqlalchemy import select
     from .database import jobs as jobs_table, runs as runs_table
