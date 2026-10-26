@@ -368,6 +368,10 @@ def telegram_digest(request: Request) -> dict[str, object]:
         job = Job.model_validate_json(raw)
         if job.status == "new":
             new_jobs[(job.source, job.job_id)] = job
+    try:
+        minimum = max(55, min(85, int(os.getenv("TELEGRAM_ROLE_GATE_MIN_SCORE", "60"))))
+    except ValueError:
+        minimum = 60
     selected = []
     discarded = {}
     for job in new_jobs.values():
@@ -379,7 +383,7 @@ def telegram_digest(request: Request) -> dict[str, object]:
             "level": job.experience_level,
             "eligibility": job.eligibility_status,
         }
-        permitted, reason = evaluate(meta)
+        permitted, reason = evaluate(meta, minimum=minimum)
         if permitted:
             selected.append(job)
         else:
