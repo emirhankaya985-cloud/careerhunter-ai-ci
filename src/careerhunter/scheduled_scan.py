@@ -325,28 +325,31 @@ def telegram_smoke(request: Request) -> dict[str, object]:
 
 @router.get("/internal/telegram/digest")
 def telegram_digest(request: Request) -> dict[str, object]:
-    """Return only public job metadata for the signed daily GitHub workflow.
+    """Private owner Telegram daily report, using signed GitHub workflow OIDC.
 
-    GitHub hosts the Telegram token. Render hosts PostgreSQL. Neither system
-    needs the other system's credentials. No contact or CV data is returned.
+    Include ALL newly seen jobs, even weak/ineligible matches, with explicit
+    suitability labels. Only public job metadata leaves Render. Neither CV
+    details nor Bot credentials are transferred.
     """
-    _require_github_oidc(request, workflow=TELEGRAM_REPORT_WORKFLOW,
-                         events=frozenset({"workflow_run"}))
+    _require_github_oidc(
+        request, workflow=TELEGRAM_REPORT_WORKFLOW,
+        events=frozenset({"workflow_run", "workflow_dispatch", "push"}),
+    )
     from sqlalchemy import select
     from .database import jobs as jobs_table, runs as runs_table
     from .models import Job
     from .private_site import _get_engine
-    from .notifications.telegram import _get_relevant
 
     with _get_engine().connect() as connection:
         latest = connection.execute(
-            select(runs_table)
-            .where(runs_table.c.slot == "jobs")
-            .order_by(runs_table.c.id.desc())
-            .limit(1)
+            select(runs_table).where(runs_table.c.slot == "jobs")
+            .order_by(runs_table.c.id.desc()).limit(1)
         ).mappings().first()
         if not latest or latest["status"] != "success":
             return {"status": "no_successful_scan", "items": []}
+
+        # First observed during the most recent successful scan. A previous
+        # status="seen" is not a new discovery even when rescored.
         rows = connection.execute(
             select(jobs_table.c.payload)
             .where(jobs_table.c.first_seen_at >= latest["started_at"])
@@ -354,12 +357,27 @@ def telegram_digest(request: Request) -> dict[str, object]:
             .order_by(jobs_table.c.first_seen_at.desc())
             .limit(2500)
         ).scalars().all()
+
     try:
         threshold = max(0, min(100, int(os.getenv("TELEGRAM_MIN_SCORE", "75"))))
     except ValueError:
         threshold = 75
-    matched = _get_relevant((Job.model_validate_json(raw) for raw in rows),
-                             minimum=threshold)
+    new_jobs = {}
+    for raw in rows:
+        job = Job.model_validate_json(raw)
+        if job.status == "new":
+            new_jobs[(job.source, job.job_id)] = job
+    ordered = sorted(
+        new_jobs.values(),
+        key=lambda j: ((j.match_score or 0), j.match_method == "llm"),
+        reverse=True,
+    )
+    strong = sum(
+        1 for j in ordered
+        if (j.match_score or 0) >= threshold
+        and j.eligibility_status != "ineligible"
+        and j.experience_level != "senior"
+    )
     items = [{
         "title": job.title[:90],
         "company": job.company[:70],
@@ -368,12 +386,14 @@ def telegram_digest(request: Request) -> dict[str, object]:
         "score": int(job.match_score or 0),
         "method": job.match_method,
         "eligibility": job.eligibility_status,
-    } for job in matched[:3]]
+        "level": job.experience_level,
+    } for job in ordered[:5]]
     return {
         "status": "ready",
         "run_id": int(latest["id"]),
         "jobs_new": int(latest["jobs_new"] or 0),
-        "strong_count": len(matched),
+        "strong_count": strong,
+        "listed_count": len(ordered),
         "threshold": threshold,
         "items": items,
     }
