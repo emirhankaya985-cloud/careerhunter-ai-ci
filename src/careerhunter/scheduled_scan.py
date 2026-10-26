@@ -387,7 +387,7 @@ def telegram_digest(request: Request) -> dict[str, object]:
         "method": job.match_method,
         "eligibility": job.eligibility_status,
         "level": job.experience_level,
-    } for job in ordered[:5]]
+    } for job in ordered[:200]]
     return {
         "status": "ready",
         "run_id": int(latest["id"]),
