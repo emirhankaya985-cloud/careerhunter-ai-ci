@@ -3,9 +3,6 @@ name: Daily Career Intelligence
 # Scheduled job runner needs no Bot token and no PostgreSQL password.
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - .github/careerhunter-rescan-2026-10-26.txt
   schedule:
     - cron: '17 6 * * *'
 
