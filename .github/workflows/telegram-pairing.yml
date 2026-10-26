@@ -1,0 +1,30 @@
+name: CareerHunter Telegram Pairing
+
+# Only the owner Chat ID may receive a message. One-time /start receipt is
+# consumed after successful delivery, preventing repeat hourly messages.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '9 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: careerhunter-telegram-owner-pairing
+  cancel-in-progress: false
+
+jobs:
+  pair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Pair only an authorized private /start
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: PYTHONPATH=src python -m careerhunter.telegram_github --pair
