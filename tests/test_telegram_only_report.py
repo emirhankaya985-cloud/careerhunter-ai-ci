@@ -23,7 +23,7 @@ def test_five_weak_jobs_go_to_telegram_not_site():
     batches = report.make_messages(data)
     assert len(batches) == 1
     message, buttons = batches[0]
-    assert "Yeni ilan: <b>5</b>" in message
+    assert "Taranan yeni ilan: <b>5</b>" in message
     assert message.count("Düşük/orta uyum") == 5
     assert "&lt;1&gt;" in message
     assert "<1>" not in message
