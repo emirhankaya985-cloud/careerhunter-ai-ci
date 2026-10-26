@@ -1,2 +1,0 @@
-One-off quality gate acceptance check 2026-10-26.
-Expected: 5 newly discovered roles were off-target or too weak; no irrelevant vacancy links should be sent. Notify owner with accurate filtered counts.
