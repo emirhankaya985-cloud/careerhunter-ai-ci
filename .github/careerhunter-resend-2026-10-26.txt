@@ -1,0 +1,3 @@
+Request: resend the five newly discovered CareerHunter jobs from 2026-10-26 as a Telegram-only digest.
+Reason: original report was suppressed by high score threshold; original Telegram connectivity verified.
+Never publish secrets or applicant personal details.
