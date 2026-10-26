@@ -4,9 +4,6 @@ name: CareerHunter Telegram Pairing
 # consumed after successful delivery, preventing repeat hourly messages.
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - .github/workflows/telegram-pairing.yml
   schedule:
     - cron: '9 * * * *'
 
