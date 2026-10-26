@@ -2,9 +2,6 @@ name: Telegram Connection Smoke
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - .github/workflows/telegram-smoke.yml
 
 permissions:
   contents: read
