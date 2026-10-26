@@ -33,10 +33,14 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
         lines = [
             "📬 <b>CareerHunter AI | Günlük iş raporu</b>",
             f"🆕 Bugün bulunan yeni ilan: <b>{total}</b>",
-            "⭐ Güçlü eşleşme: <b>0</b>",
+            "🎯 Sana uygun yeni ilan: <b>0</b>",
         ]
         if total:
-            lines.append("⚠️ Yeni ilan sayacı var ama ayrıntılar yüklenemedi; bu durum incelenmeli.")
+            excluded = max(0, int(payload.get("quality_rejected", total)))
+            lines.append(
+                f"🛡️ {excluded} ilgisiz veya uygunluğu düşük ilan filtrelendi. "
+                "Alakasız iş linkleri gönderilmiyor."
+            )
         else:
             lines.append("Bugün yeni ilan yok. Sistem günlük taramasını tamamladı. ✅")
         return [("\n".join(lines), [])]
@@ -47,7 +51,7 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
         batch = items[start:start + CHUNK_SIZE]
         lines = [
             "📬 <b>CareerHunter AI | Günlük yeni ilanlar</b>",
-            f"🆕 Yeni ilan: <b>{total}</b> · ⭐ Güçlü: <b>{strong}</b> "
+            f"🆕 Taranan yeni ilan: <b>{total}</b> · 🎯 Uygun: <b>{listed}</b> · ⭐ Güçlü: <b>{strong}</b> "
             f"(en az {threshold}/100)",
             f"📦 Bölüm {part + 1}/{count}",
             "",
