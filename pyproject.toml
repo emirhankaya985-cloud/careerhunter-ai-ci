@@ -40,3 +40,6 @@ target-version = "py311"
 # introduced deliberately after the existing code is remediated.
 select = ["E4", "E7", "E9", "F"]
 
+
+[tool.ruff.lint.per-file-ignores]
+"src/careerhunter/daily_new_jobs.py" = ["F401"]
