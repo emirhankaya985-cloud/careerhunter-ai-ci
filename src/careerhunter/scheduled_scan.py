@@ -333,12 +333,13 @@ def telegram_digest(request: Request) -> dict[str, object]:
     """
     _require_github_oidc(
         request, workflow=TELEGRAM_REPORT_WORKFLOW,
-        events=frozenset({"workflow_run", "workflow_dispatch", "push"}),
+        events=frozenset({"workflow_run"}),
     )
     from sqlalchemy import select
     from .database import jobs as jobs_table, runs as runs_table
     from .models import Job
     from .private_site import _get_engine
+    from .job_quality import evaluate
 
     with _get_engine().connect() as connection:
         latest = connection.execute(
@@ -367,8 +368,24 @@ def telegram_digest(request: Request) -> dict[str, object]:
         job = Job.model_validate_json(raw)
         if job.status == "new":
             new_jobs[(job.source, job.job_id)] = job
+    selected = []
+    discarded = {}
+    for job in new_jobs.values():
+        meta = {
+            "title": job.title, "location": job.location,
+            "description": job.description[:12000],
+            "skills": job.skills_required,
+            "score": job.match_score or 0,
+            "level": job.experience_level,
+            "eligibility": job.eligibility_status,
+        }
+        permitted, reason = evaluate(meta)
+        if permitted:
+            selected.append(job)
+        else:
+            discarded[reason] = discarded.get(reason, 0) + 1
     ordered = sorted(
-        new_jobs.values(),
+        selected,
         key=lambda j: ((j.match_score or 0), j.match_method == "llm"),
         reverse=True,
     )
@@ -394,6 +411,8 @@ def telegram_digest(request: Request) -> dict[str, object]:
         "jobs_new": int(latest["jobs_new"] or 0),
         "strong_count": strong,
         "listed_count": len(ordered),
+        "quality_rejected": len(new_jobs) - len(ordered),
+        "quality_reasons": discarded,
         "threshold": threshold,
         "items": items,
     }
