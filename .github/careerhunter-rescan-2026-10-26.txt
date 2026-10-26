@@ -1,0 +1,1 @@
+Owner requested: re-scan CareerHunter job sources using the updated role, experience, geography, and fit filters. Trigger exactly one new Daily Career Intelligence run on main. Do not apply to jobs or send external outreach.
