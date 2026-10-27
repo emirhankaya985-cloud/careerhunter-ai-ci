@@ -58,9 +58,12 @@ class RuleBasedMatcher:
         title = job.title.casefold()
         location = job.location.casefold()
         text = f"{job.title} {job.location} {job.description[:18000]}".casefold()
-        remote = job.remote_type == "remote" or _contains(title, "remote")
+        # Some ATS feeds encode Remote Worldwide only in the location field.
+        # Do not infer global work eligibility from a bare "Remote" label.
+        remote = (job.remote_type == "remote" or _contains(title, "remote")
+                  or _contains(location, "remote"))
         junior_terms = self.keywords.get("junior", []) + [
-            "apprentice", "trainee", "new graduate"]
+            "intern", "apprentice", "trainee", "new graduate"]
         senior_terms = self.keywords.get("senior", []) + ["head of", "vp", "vice president"]
 
         is_senior = any(_contains(title, term.casefold()) for term in senior_terms)
@@ -114,7 +117,10 @@ class RuleBasedMatcher:
         abroad_only = any(_contains(text, term) for term in (
             "us only", "usa only", "united states only", "uk only",
             "eu only", "must be based in the us", "must reside in the us",
-            "remote within the us", "remote within the uk"))
+            "remote within the us", "remote within the uk")) or bool(re.search(
+                r"(?<!\\w)(?:us|usa|uk|eu|germany|united[ -]states|united[ -]kingdom)"
+                r"[- ]+only(?!\\w)", text
+            ))
         global_remote = remote and any(
             _contains(text, term) for term in (
                 "worldwide remote", "remote worldwide", "work from anywhere",
@@ -125,7 +131,8 @@ class RuleBasedMatcher:
                 "remote in turkey", "remote from turkey", "remote from türkiye",
                 "based in turkey", "based in türkiye")
         )
-        domestic = any(_contains(location, term) for term in ("turkey", "türkiye", "istanbul"))
+        domestic = any(_contains(location, term) for term in (
+            "turkey", "türkiye", "istanbul", "ankara", "izmir", "i̇zmir"))
         if abroad_only and remote:
             job.turkey_eligibility = "ineligible"
             job.eligibility_status = "ineligible"
