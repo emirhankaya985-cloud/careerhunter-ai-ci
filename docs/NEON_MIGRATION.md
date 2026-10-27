@@ -17,7 +17,7 @@ compute/storage/transfer limits and no uptime SLA. Never enable paid services.
    database and dashboard service.
 2. Confirm which source `DATABASE_URL` is actually used by the collector and which
    `DASHBOARD_DATABASE_URL` the dashboard reads. Do not guess.
-3. Check all nine app tables exist in the source; list counts, confirm available
+3. Check all ten app tables exist in the source; list counts, confirm available
    Neon storage and running capacity. Obtain a secure, private `pg_dump` of the
    source; never commit the dump or production environment values to GitHub.
 4. Pause GitHub Actions Daily Career Intelligence and ensure no current scan is
@@ -46,7 +46,7 @@ included in the transfer.
 ## Cut over, verify, rollback
 
 1. Create a dedicated SELECT-only role in Neon for the dashboard. Grant SELECT on
-   the nine tables only. Do not give web dashboard write permissions.
+   the ten tables only. Do not give web dashboard write permissions.
 2. Update Render service environment variables securely:
    `DATABASE_URL` (collector) and `DASHBOARD_DATABASE_URL` (read-only dashboard)
    to the appropriate Neon connection strings. **Keep the existing secrets**
