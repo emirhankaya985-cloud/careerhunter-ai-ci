@@ -102,3 +102,55 @@ def test_pair_secret_is_required(monkeypatch):
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
     monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
     assert not client.pair_owner_from_start()
+
+
+
+def test_cli_pairing_is_not_falsely_green(monkeypatch):
+    monkeypatch.setattr(client, "configured", lambda: True)
+    monkeypatch.setattr(client, "pair_owner_from_start", lambda: False)
+    monkeypatch.setattr(client.sys, "argv", ["careerhunter", "--pair"])
+    assert client.main() == 1
+    monkeypatch.setattr(client, "pair_owner_from_start", lambda: True)
+    assert client.main() == 0
+
+
+def test_cli_requires_credentials_for_all_modes(monkeypatch):
+    monkeypatch.setattr(client, "configured", lambda: False)
+    for mode in ("--pair", "--diagnose", "--digest", "--test"):
+        monkeypatch.setattr(client.sys, "argv", ["careerhunter", mode])
+        assert client.main() == 1
+
+
+def test_diagnosis_requires_exact_private_chat(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", TOKEN)
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", OWNER)
+    from urllib.parse import urlsplit
+
+    def run(type_, chat_id):
+        def fake_urlopen(request, timeout=16):
+            method = urlsplit(request.full_url).path.rsplit("/", 1)[-1]
+            if method == "getMe":
+                return Response({"ok": True, "result": {"username": "careerhunter_test"}})
+            if method == "getChat":
+                return Response({"ok": True, "result": {
+                    "type": type_, "id": chat_id,
+                }})
+            raise AssertionError("Unexpected Telegram API call: " + method)
+
+        monkeypatch.setattr(client, "urlopen", fake_urlopen)
+        return client.diagnose_connection()
+
+    assert run("private", int(OWNER))
+    assert not run("group", int(OWNER))
+    assert not run("private", int(OWNER) + 1)
+
+
+def test_health_workflow_schedules_diagnosis_not_repeated_pairing():
+    from pathlib import Path
+    source = (Path(__file__).parents[1] /
+              ".github/workflows/telegram-pairing.yml").read_text()
+    assert "cron: '9 7 * * *'" in source
+    assert "CHECK_MODE: ${{ inputs.mode || 'diagnose' }}" in source
+    assert "--diagnose" in source
+    assert "--pair" in source
+    assert "if: github.event_name == 'push'" in source

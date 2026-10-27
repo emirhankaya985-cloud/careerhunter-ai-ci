@@ -1,30 +1,60 @@
-name: CareerHunter Telegram Pairing
+name: CareerHunter Telegram Private Chat Health
 
-# Only the owner Chat ID may receive a message. One-time /start receipt is
-# consumed after successful delivery, preventing repeat hourly messages.
+# Daily read-only chat identity check; unlike the old hourly pairing,
+# a green job now proves that the configured Bot API chat is private and matches
+# the authorized ID. Pairing stays manual and fails if /start was not received.
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'diagnose=read-only private chat check; pair=confirm a new /start'
+        required: true
+        default: diagnose
+        type: choice
+        options:
+          - diagnose
+          - pair
   schedule:
-    - cron: '9 * * * *'
+    - cron: '9 7 * * *'
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/telegram-pairing.yml
+      - src/careerhunter/telegram_github.py
 
 permissions:
   contents: read
 
 concurrency:
-  group: careerhunter-telegram-owner-pairing
+  group: careerhunter-telegram-owner-health
   cancel-in-progress: false
 
 jobs:
-  pair:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - name: Pair only an authorized private /start
+      - name: Verify the exact private Telegram chat or acknowledge owner /start
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: PYTHONPATH=src python -m careerhunter.telegram_github --pair
+          CHECK_MODE: ${{ inputs.mode || 'diagnose' }}
+        run: |
+          if [ "$CHECK_MODE" = "pair" ]; then
+            PYTHONPATH=src python -m careerhunter.telegram_github --pair
+          elif [ "$CHECK_MODE" = "diagnose" ]; then
+            PYTHONPATH=src python -m careerhunter.telegram_github --diagnose
+          else
+            echo "Unsupported check mode"
+            exit 1
+          fi
+      - name: Send one private delivery probe after health code changes
+        if: github.event_name == 'push'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: PYTHONPATH=src python -m careerhunter.telegram_github --test
