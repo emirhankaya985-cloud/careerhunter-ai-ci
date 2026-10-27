@@ -55,4 +55,20 @@ jobs:
           assert headers.get("X-Frame-Options") == "DENY", (
               "FAIL: frame guard missing")
           print("PASS: anonymous redirect, login page, and security headers")
+
+          status, url, body, _ = get("/healthz")
+          assert status == 200 and body.strip() == "ok", "FAIL: application health endpoint"
+          print("PASS: live app process health")
+
+          status, url, body, _ = get("/robots.txt")
+          assert status == 200 and "Disallow: /" in body, (
+              "FAIL: private panel must disallow crawlers")
+          print("PASS: owner-only site excluded from crawlers")
+
+          status, final_url, body, headers = get("/telegram/setup")
+          assert status == 200 and final_url.endswith("/login"), (
+              "FAIL: Telegram pairing page must require authentication")
+          assert "no-store" in headers.get("Cache-Control", ""), (
+              "FAIL: private Telegram setup must prohibit caching")
+          print("PASS: Telegram setup requires owner authentication")
           PY
