@@ -118,8 +118,8 @@ class RuleBasedMatcher:
             "us only", "usa only", "united states only", "uk only",
             "eu only", "must be based in the us", "must reside in the us",
             "remote within the us", "remote within the uk")) or bool(re.search(
-                r"(?<!\\w)(?:us|usa|uk|eu|germany|united[ -]states|united[ -]kingdom)"
-                r"[- ]+only(?!\\w)", text
+                r"(?<!\w)(?:us|usa|uk|eu|germany|united[ -]states|united[ -]kingdom)"
+                r"[- ]+only(?!\w)", text
             ))
         global_remote = remote and any(
             _contains(text, term) for term in (
