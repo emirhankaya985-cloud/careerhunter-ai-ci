@@ -88,7 +88,7 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
         lines = [
             "📬 <b>CareerHunter AI | Günlük yeni ilanlar</b>",
             f"🆕 Taranan yeni ilan: <b>{total}</b> · 🔎 İncelenecek: <b>{listed}</b> · ⭐ {threshold}+ puan: <b>{strong}</b>",
-            f"✅ Öncelikli (junior + Türkiye kanıtı): <b>{sum(_priority(j, threshold) for j in items)}</b> / paylaşılan {len(items)}",
+            f"✅ Öncelikli (junior + konum sinyali): <b>{sum(_priority(j, threshold) for j in items)}</b> / paylaşılan {len(items)}",
             f"📦 Bölüm {part + 1}/{count}",
             "",
         ]
@@ -102,7 +102,7 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
                      "🔎 Yüksek puan; koşullar teyit edilmeli" if score >= threshold else
                      "ℹ️ Düşük/orta uyum")
             eligibility = ("⛔ Türkiye'den uygun değil" if ineligible else
-                           "✅ Türkiye uygunluğu doğrulandı" if
+                           "🟢 İlanda Türkiye/global konum sinyali var; şartları kontrol et" if
                            job.get("eligibility") == "eligible" else
                            "🌍 Türkiye'den çalışma: teyit gerekli")
             url = str(job.get("url", ""))
