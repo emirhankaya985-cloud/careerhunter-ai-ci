@@ -109,7 +109,8 @@ def test_priority_jobs_come_before_ambiguous_high_scores(monkeypatch):
     assert buttons[0]["url"].endswith("/2")
     assert "✅ Öncelikli eşleşme" in text
     assert "🔎 Yüksek puan; koşullar teyit edilmeli" in text
-    assert "Öncelikli (junior + Türkiye kanıtı): <b>1</b>" in text
+    assert "Öncelikli (junior + konum sinyali): <b>1</b>" in text
+    assert "İlanda Türkiye/global konum sinyali var; şartları kontrol et" in text
     assert text.index("Python Engineer &lt;2&gt;") < text.index("Python Engineer &lt;1&gt;")
 
 
