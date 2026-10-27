@@ -33,7 +33,8 @@ def test_five_weak_jobs_go_to_telegram_not_site():
     assert "kariyer paneli" not in message.lower()
 
 
-def test_all_12_are_sent_in_three_batches():
+def test_all_12_are_sent_in_three_batches(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_DAILY_ITEM_LIMIT", "20")
     data = {"status": "ready", "jobs_new": 12, "strong_count": 0,
             "listed_count": 12, "items": [job(i) for i in range(12)]}
     chunks = report.make_messages(data)
@@ -80,3 +81,87 @@ def test_main_sends_all_batches_and_fails_when_telegram_declines(monkeypatch):
     assert len(calls) == 2
     monkeypatch.setattr(report, "send", lambda *args: False)
     assert report.main() == 1
+
+
+def test_default_daily_limit_prevents_message_flood(monkeypatch):
+    monkeypatch.delenv("TELEGRAM_DAILY_ITEM_LIMIT", raising=False)
+    data = {"status": "ready", "jobs_new": 25,
+            "listed_count": 25,
+            "items": [job(i, score=61) for i in range(25)]}
+    batches = report.make_messages(data)
+    assert len(batches) == 2
+    assert sum(len(buttons) for _, buttons in batches) == 10
+    assert "15 ek ilan" in batches[-1][0]
+    assert "İncelenecek: <b>25</b>" in batches[0][0]
+
+
+def test_priority_jobs_come_before_ambiguous_high_scores(monkeypatch):
+    monkeypatch.delenv("TELEGRAM_DAILY_ITEM_LIMIT", raising=False)
+    ambiguous = {**job(1, score=98), "level": "unknown",
+                 "eligibility": "needs_review"}
+    actionable = {**job(2, score=81), "level": "junior",
+                  "eligibility": "eligible"}
+    result = report.make_messages({
+        "status": "ready", "jobs_new": 2, "strong_count": 2,
+        "threshold": 75, "items": [ambiguous, actionable],
+    })
+    text, buttons = result[0]
+    assert buttons[0]["url"].endswith("/2")
+    assert "✅ Öncelikli eşleşme" in text
+    assert "🔎 Yüksek puan; koşullar teyit edilmeli" in text
+    assert "Öncelikli (junior + konum sinyali): <b>1</b>" in text
+    assert "İlanda Türkiye/global konum sinyali var; şartları kontrol et" in text
+    assert text.index("Python Engineer &lt;2&gt;") < text.index("Python Engineer &lt;1&gt;")
+
+
+def test_invalid_daily_limit_falls_back_and_boundaries_are_clamped(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_DAILY_ITEM_LIMIT", "oops")
+    assert report._daily_limit() == 10
+    monkeypatch.setenv("TELEGRAM_DAILY_ITEM_LIMIT", "50000")
+    assert report._daily_limit() == 20
+    monkeypatch.setenv("TELEGRAM_DAILY_ITEM_LIMIT", "-100")
+    assert report._daily_limit() == 1
+
+
+def test_rerun_never_replays_previous_daily_digest(monkeypatch):
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
+    monkeypatch.setattr(report, "configured", lambda: True)
+    monkeypatch.setattr(report, "call", lambda _path: pytest.fail("API should not be called"))
+    monkeypatch.setattr(report, "send", lambda *_args: pytest.fail("Would duplicate notification"))
+    assert report.main() == 0
+
+
+def test_filtered_reasons_are_explicit_without_untrusted_source_text():
+    payload = {
+        "status": "ready",
+        "jobs_new": 30,
+        "listed_count": 1,
+        "strong_count": 0,
+        "quality_rejected": 29,
+        "quality_reasons": {
+            "low_score": 20,
+            "senior_or_non_engineering": 6,
+            "not_target_role": 3,
+            "<img src=bad>": 999,
+        },
+        "items": [job(3, score=66)],
+    }
+    output = report.make_messages(payload)
+    assert len(output) == 1
+    msg = output[0][0]
+    assert "Filtre nedenleri" in msg
+    assert "Puan eşiğinin altında: 20" in msg
+    assert "Senior / hedef alan dışı: 6" in msg
+    assert "Hedef pozisyon değil: 3" in msg
+    assert "<img" not in msg
+    assert len(output[0][1]) == 1
+
+
+def test_zero_selected_jobs_also_explain_filter_reasons():
+    result = report.make_messages({
+        "status": "ready", "jobs_new": 4, "quality_rejected": 4,
+        "items": [], "quality_reasons": {"region_restricted": 4},
+    })
+    msg, buttons = result[0]
+    assert "Bölge kısıtlaması: 4" in msg
+    assert buttons == []

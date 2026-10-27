@@ -122,3 +122,43 @@ def test_historical_ai_pass_only_enriches_selected_jobs(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match="no valid AI analyses"):
         enrich_best_existing(url, limit=20)
     repo.engine.dispose()
+
+
+def test_intern_title_gets_junior_scoring_not_unknown_experience():
+    matcher = RuleBasedMatcher(sample(), {"junior": ["junior", "internship"]})
+    intern = matcher.score(example_job(
+        title="Machine Learning Intern", description="Python FastAPI. Remote worldwide."
+    ))
+    assert intern.experience_level == "junior"
+    assert intern.match_score >= 65
+
+
+def test_ats_remote_worldwide_location_counts_even_when_type_unknown():
+    matcher = RuleBasedMatcher(sample(), {"junior": ["internship", "junior"]})
+    role = example_job(
+        title="Python Intern", description="Python FastAPI SQL trainee position."
+    ).model_copy(update={"location": "Remote Worldwide", "remote_type": "unknown"})
+    scored = matcher.score(role)
+    assert scored.experience_level == "junior"
+    assert scored.eligibility_status == "eligible"
+    assert scored.match_score >= 75
+
+
+def test_remote_us_only_hyphen_overrides_any_worldwide_claim():
+    matcher = RuleBasedMatcher(sample(), {"junior": ["internship", "junior"]})
+    role = example_job(
+        title="Python Intern",
+        description="Python FastAPI. Remote worldwide opportunities at this firm."
+    ).model_copy(update={"location": "Remote US-only", "remote_type": "unknown"})
+    scored = matcher.score(role)
+    assert scored.eligibility_status == "ineligible"
+    assert scored.match_score == 0
+
+
+def test_domestic_ankara_without_country_name_is_eligible():
+    matcher = RuleBasedMatcher(sample(), {"junior": ["internship", "junior"]})
+    role = example_job(
+        title="Junior Python Developer", description="Python backend work."
+    ).model_copy(update={"location": "Ankara", "remote_type": "onsite"})
+    scored = matcher.score(role)
+    assert scored.eligibility_status == "eligible"

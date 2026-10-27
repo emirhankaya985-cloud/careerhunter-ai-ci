@@ -91,7 +91,7 @@ def test_zero_good_jobs_message_reports_filtered_count_without_wrong_links():
     results = make_messages(payload)
     assert len(results) == 1
     text, buttons = results[0]
-    assert "5" in text and "Sana uygun yeni ilan: <b>0</b>" in text
+    assert "5" in text and "Ön elemeden geçen yeni ilan: <b>0</b>" in text
     assert "filtrelendi" in text
     assert buttons == []
 
@@ -114,4 +114,4 @@ def test_live_digest_can_show_one_good_job_without_all_the_bad_ones():
     assert len(rendered) == 1
     assert len(rendered[0][1]) == 1
     assert "Junior Python Developer" in rendered[0][0]
-    assert "Uygun: <b>1</b>" in rendered[0][0]
+    assert "İncelenecek: <b>1</b>" in rendered[0][0]
