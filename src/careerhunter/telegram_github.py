@@ -116,8 +116,16 @@ def diagnose_connection() -> bool:
     chat_code, chat_data = bot_api("getChat", {"chat_id": chat})
     print("DIAG: configured_chat_getChat_http=" + str(chat_code))
     if chat_code == 200 and chat_data.get("ok") is True:
-        print("DIAG: bot_can_access_configured_chat=true")
-        return True
+        details = chat_data.get("result") or {}
+        is_private = details.get("type") == "private"
+        matches_id = str(details.get("id")) == chat
+        print("DIAG: configured_chat_is_private=" + str(is_private).lower())
+        print("DIAG: configured_chat_id_matches=" + str(matches_id).lower())
+        if is_private and matches_id:
+            print("DIAG: bot_can_access_configured_private_chat=true")
+            return True
+        print("DIAG: configured_chat_is_not_authorized_private_chat")
+        return False
 
     updates_code, updates_data = bot_api("getUpdates", {"limit": 100, "timeout": 0,
                                                        "allowed_updates": ["message"]})
@@ -272,10 +280,12 @@ def main() -> int:
     args = set(sys.argv[1:])
     if not configured():
         print("NOT_CONFIGURED: GitHub Secrets TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID missing or invalid")
-        return 1 if ("--test" in args or "--failure" in args) else 0
+        return 1  # Never mark missing bot credentials as a successful check.
     if "--pair" in args:
-        pair_owner_from_start()
-        return 0
+        paired = pair_owner_from_start()
+        if not paired:
+            print("PAIR: not_verified; an authorized private /start is required for pairing")
+        return 0 if paired else 1
     if "--diagnose" in args:
         return 0 if diagnose_connection() else 1
     if "--test" in args:
