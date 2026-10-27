@@ -15,6 +15,38 @@ from .telegram_github import configured, send
 
 CHUNK_SIZE = 5
 DEFAULT_DAILY_LIMIT = 10
+FILTER_REASON_LABELS = {
+    "low_score": "Puan eşiğinin altında",
+    "invalid_score": "Puan hesaplanamadı",
+    "senior_or_non_engineering": "Senior / hedef alan dışı",
+    "not_target_role": "Hedef pozisyon değil",
+    "not_eligible": "Bölgesel uygunluk olumsuz",
+    "generic_software_no_target_stack": "Hedef teknoloji bulunamadı",
+    "location_unknown": "Konum belirsiz",
+    "region_restricted": "Bölge kısıtlaması",
+    "outside_target_geography": "Hedef coğrafya dışında",
+}
+
+
+def _quality_reasons(payload: dict) -> str:
+    """Expose high-level rejection reasons without leaking individual job data."""
+    counts = payload.get("quality_reasons")
+    if not isinstance(counts, dict):
+        return ""
+    ranked = []
+    for key, label in FILTER_REASON_LABELS.items():
+        try:
+            count = int(counts.get(key, 0))
+        except (TypeError, ValueError):
+            continue
+        if count > 0:
+            ranked.append((count, label))
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    if not ranked:
+        return ""
+    return "🛡️ Filtre nedenleri: " + " · ".join(
+        f"{label}: {count}" for count, label in ranked[:3]
+    )
 
 
 def _score(job: dict) -> int:
@@ -79,6 +111,8 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
             )
         else:
             lines.append("Bugün yeni ilan yok. Sistem günlük taramasını tamamladı. ✅")
+        if explanation := _quality_reasons(payload):
+            lines.append(explanation)
         return [("\n".join(lines), [])]
 
     count = (len(items) + CHUNK_SIZE - 1) // CHUNK_SIZE
@@ -90,8 +124,10 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
             f"🆕 Taranan yeni ilan: <b>{total}</b> · 🔎 İncelenecek: <b>{listed}</b> · ⭐ {threshold}+ puan: <b>{strong}</b>",
             f"✅ Öncelikli (junior + konum sinyali): <b>{sum(_priority(j, threshold) for j in items)}</b> / paylaşılan {len(items)}",
             f"📦 Bölüm {part + 1}/{count}",
-            "",
         ]
+        if part == 0 and (explanation := _quality_reasons(payload)):
+            lines.append(explanation)
+        lines.append("")
         buttons = []
         for offset, job in enumerate(batch, start + 1):
             score = _score(job)
