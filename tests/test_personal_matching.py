@@ -136,7 +136,7 @@ def test_intern_title_gets_junior_scoring_not_unknown_experience():
 def test_ats_remote_worldwide_location_counts_even_when_type_unknown():
     matcher = RuleBasedMatcher(sample(), {"junior": ["internship", "junior"]})
     role = example_job(
-        title="Python Intern", description="Python FastAPI trainee position."
+        title="Python Intern", description="Python FastAPI SQL trainee position."
     ).model_copy(update={"location": "Remote Worldwide", "remote_type": "unknown"})
     scored = matcher.score(role)
     assert scored.experience_level == "junior"
