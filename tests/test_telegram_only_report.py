@@ -129,3 +129,39 @@ def test_rerun_never_replays_previous_daily_digest(monkeypatch):
     monkeypatch.setattr(report, "call", lambda _path: pytest.fail("API should not be called"))
     monkeypatch.setattr(report, "send", lambda *_args: pytest.fail("Would duplicate notification"))
     assert report.main() == 0
+
+
+def test_filtered_reasons_are_explicit_without_untrusted_source_text():
+    payload = {
+        "status": "ready",
+        "jobs_new": 30,
+        "listed_count": 1,
+        "strong_count": 0,
+        "quality_rejected": 29,
+        "quality_reasons": {
+            "low_score": 20,
+            "senior_or_non_engineering": 6,
+            "not_target_role": 3,
+            "<img src=bad>": 999,
+        },
+        "items": [job(3, score=66)],
+    }
+    output = report.make_messages(payload)
+    assert len(output) == 1
+    msg = output[0][0]
+    assert "Filtre nedenleri" in msg
+    assert "Puan eşiğinin altında: 20" in msg
+    assert "Senior / hedef alan dışı: 6" in msg
+    assert "Hedef pozisyon değil: 3" in msg
+    assert "<img" not in msg
+    assert len(output[0][1]) == 1
+
+
+def test_zero_selected_jobs_also_explain_filter_reasons():
+    result = report.make_messages({
+        "status": "ready", "jobs_new": 4, "quality_rejected": 4,
+        "items": [], "quality_reasons": {"region_restricted": 4},
+    })
+    msg, buttons = result[0]
+    assert "Bölge kısıtlaması: 4" in msg
+    assert buttons == []
