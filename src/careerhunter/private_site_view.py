@@ -171,7 +171,7 @@ nav .links{display:flex;flex-wrap:wrap}.sidebarbottom,.tiny{display:none}main{pa
 {% else %}Henüz doğrulanmadı{% endif %}</div>
 {% if j.verification_evidence_url %}<div><a class="link small" href="{{ j.verification_evidence_url|safe_href }}" target="_blank" rel="noopener noreferrer">ATS kanıtını aç ↗</a></div>{% endif %}</td><td>{{ j.company }}</td><td>{{ j.location }}</td>
 <td><span class="tag">{{ j.match_score if j.match_score is not none else "—" }}/100</span><div class="small muted">{{ "AI analizi" if j.match_method == "llm" else "Profil puanı" }}</div><div class="small muted">{{ "Türkiye: uygun kanıt" if j.eligibility_status == "eligible" else "Türkiye: uygun değil" if j.eligibility_status == "ineligible" else "Çalışma koşulu: teyit gerekli" }}</div><details><summary class="small">Neden bu puan?</summary>{% for reason in j.score_reasons[:5] %}<div class="small muted">{{ reason }}</div>{% endfor %}</details></td>
-<td><a class="link" href="{{ j.job_url|safe_href }}" target="_blank" rel="noopener noreferrer">İlana git ↗</a></td></tr>{% else %}<tr><td colspan="5" class="empty">Bu aramada sonuç bulunamadı.</td></tr>{% endfor %}
+<td><a class="link" href="{{ j.job_url|safe_href }}" target="_blank" rel="noopener noreferrer">İlana git ↗</a><div><a class="link small" href="/applications/new?source={{ j.source|urlencode }}&job_id={{ j.job_id|urlencode }}">Manuel kaydet ↗</a></div></td></tr>{% else %}<tr><td colspan="5" class="empty">Bu aramada sonuç bulunamadı.</td></tr>{% endfor %}
 </tbody></table></div>
 <div class="pagination">
 {% if page>1 %}<a class="pagebtn" href="/?view=jobs&q={{ query|urlencode }}&sort={{ sort }}&page={{ page-1 }}">← Önceki</a>{% endif %}
