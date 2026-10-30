@@ -58,3 +58,17 @@ def test_cli_reads_private_local_json_and_writes_markdown(tmp_path, capsys):
     assert main(["--profile", str(private), "--job", str(job), "--output", str(out)]) == 0
     assert out.read_text(encoding="utf-8").startswith("# Example Applicant\n")
     assert "Wrote local CV:" in capsys.readouterr().out
+
+
+
+def test_direct_cli_refuses_private_output_inside_public_repository(tmp_path):
+    from careerhunter.cv_tailor import main
+    from pathlib import Path
+    profile = tmp_path / "private.json"
+    job = tmp_path / "job.json"
+    profile.write_text(json.dumps(PROFILE), encoding="utf-8")
+    job.write_text(json.dumps(JOB), encoding="utf-8")
+    repo_root = Path(__import__("careerhunter.cv_tailor", fromlist=["__file__"]).__file__).resolve().parents[2]
+    with pytest.raises(SystemExit):
+        main(["--profile", str(profile), "--job", str(job),
+              "--output", str(repo_root / "private_cv.md")])
