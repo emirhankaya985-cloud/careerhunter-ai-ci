@@ -23,6 +23,7 @@ from sqlalchemy import Integer, cast, create_engine, func, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import ArgumentError
 
 from .database import DatabaseRepository, contacts, jobs, runs
 from .models import Job
@@ -41,7 +42,26 @@ failed_logins: dict[str, list[float]] = {}
 def _settings() -> tuple[str, str, str, bool]:
     password = os.environ.get("DASHBOARD_PASSWORD", "")
     secret = os.environ.get("DASHBOARD_SESSION_SECRET", "")
+    # Preserve the original Render URL unchanged for a one-setting rollback.
+    # A Neon opt-in changes only the effective connection used by all app
+    # readers, OIDC scanners and digest routes (via this shared _settings).
     database = os.environ.get("DASHBOARD_DATABASE_URL", "")
+    target = os.environ.get("CAREERHUNTER_DB_TARGET", "render").strip().lower()
+    if target == "neon":
+        neon = os.environ.get("CAREERHUNTER_NEON_DATABASE_URL", "")
+        try:
+            parsed_neon = make_url(neon)
+            valid_neon = (parsed_neon.get_backend_name() == "postgresql"
+                          and (parsed_neon.host or "").lower().endswith(".neon.tech")
+                          and parsed_neon.database == "careerhunter_live"
+                          and bool(parsed_neon.username))
+        except (ArgumentError, ValueError, TypeError):
+            valid_neon = False
+        if not valid_neon:
+            raise RuntimeError("Neon cutover requires a verified dedicated target")
+        database = neon
+    elif target != "render":
+        raise RuntimeError("Unknown CareerHunter database target")
     secure = os.environ.get("DASHBOARD_SECURE_COOKIE", "true").lower() != "false"
     if len(password) < 16 or len(secret) < 32 or len(database) < 8:
         raise RuntimeError("DASHBOARD_PASSWORD (16+), DASHBOARD_SESSION_SECRET (32+) "
