@@ -27,7 +27,7 @@ _state: dict[str, object] = {"status": "idle"}
 def _require_cloud_identity(request: Request) -> None:
     _require_github_oidc(
         request, workflow=WORKFLOW,
-        events=frozenset({"workflow_dispatch", "schedule"}),
+        events=frozenset({"workflow_dispatch", "push"}),
     )
 
 
