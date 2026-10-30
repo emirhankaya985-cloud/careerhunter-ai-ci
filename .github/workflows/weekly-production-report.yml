@@ -1,0 +1,52 @@
+name: Weekly CareerHunter Production Telegram Report
+
+# Summarizes the last seven verified daily workflows; no database secrets.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 18 * * 0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: careerhunter-weekly-production-report
+  cancel-in-progress: false
+
+jobs:
+  weekly_summary:
+    if: github.repository == 'emirhankaya985-cloud/careerhunter-ai-ci' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build verified seven-day report and notify Telegram
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: PYTHONPATH=src python -m careerhunter.weekly_production_digest
+
+  alert_failure:
+    needs: weekly_summary
+    if: always() && needs.weekly_summary.result == 'failure' && github.repository == 'emirhankaya985-cloud/careerhunter-ai-ci' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Notify owner of weekly reporting failure
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: PYTHONPATH=src python -m careerhunter.automation_alerts weekly
