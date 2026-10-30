@@ -103,3 +103,35 @@ python -m careerhunter.v2_workflow --db "C:\private\careerhunter.db" list
 `v2_workflow` CLI mevcut aşamada yalnızca yerel SQLite üzerindeki kayıtları
 yönetir. Canlı CRM yazma yetkisi için kimlik doğrulamalı, CSRF korumalı, düşük
 yetkili özel API ayrı güvenlik incelemesi ve kullanıcı onayı gerektirir.
+
+## 4. Gelen e-postaların salt-okunur sınıflandırılması
+
+Gmail ile canlı bağlantı bu dalda mevcut değil. Ayrı bir özel klasöre manuel
+kaydedilmiş `.eml` dosyaları, herhangi bir hesap erişimi veya ağ çağrısı
+olmadan değerlendirilebilir:
+
+```powershell
+python -m careerhunter.inbox_review --eml-dir "C:\\private\\career-mail" --output "C:\\private\\mail-review.json"
+```
+
+Çıktı yalnızca Message-ID hash'i ve önerilen `interview`, `assessment`,
+`rejection` ya da `needs_review` statüsünü içerir. Her kayıt mutlaka insan
+incelemesine ihtiyaç duyar; otomatik ret, otomatik başvuru veya cevap yoktur.
+Alıntılanmış eski ileti bölümleri mümkün olduğunda dışlanır. Gmail OAuth,
+yetkili posta okuma, senkronizasyon imleci ve izinler daha sonra kurulmalıdır.
+
+## 5. Otomatik takip hatırlatması (dağıtıldıktan sonra)
+
+`.github/workflows/followup-reminder.yml` her gün `08:10 UTC` (11:10
+Türkiye saati) için planlıdır. İşlem, yalnızca özel
+`/internal/followups/due` salt-okunur OIDC endpoint'inden gecikmiş başvuru
+takiplerinin genel iş unvanı / şirket bilgilerini çeker ve Telegram özel
+sohbetine tek özet gönderir. Kimseye e-posta göndermez, CRM durumunu değiştirmez.
+OIDC token'ı yalnızca exact main-branch workflow kimliğiyle kabul edilir;
+ek secrets Render'a aktarılmaz. Retry kaynaklı çift mesajı engellenir.
+
+**Gerçek çalışma henüz kanıtlanmadı:** Bu değişiklikler PR #5'te. Günlük
+planın gerçekten çalışması için main'e merge ve Render deploy sonrasında
+en az bir schedule+Telegram canlı kanıtı gerekir. Yerel CLI ile girilen
+başvuru kayıtları otomatik olarak Render veritabanına aktarılmaz; canlı
+hatırlatmalar yalnızca o üretim veritabanında bulunan takipleri görür.
