@@ -15,6 +15,17 @@ jobs:
       - run: pip install -e '.[dev]'
       - run: ruff check .
       - run: pytest -q
+      - name: Parse guarded Windows backup/migration PowerShell syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile('scripts/migrate_render_to_neon_windows.ps1', [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host "PASS: local backup and migration helper syntax"
 
   postgres-integration:
     runs-on: ubuntu-latest
