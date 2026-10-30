@@ -49,3 +49,31 @@ Customize it privately to obtain meaningful personal match scores. The free Rend
 Postgres instance created October 24, 2026 expires November 23, 2026; migrate or
 upgrade the database before then to retain persistent data. Free Render services
 may sleep when idle and restart on demand.
+
+
+## CareerHunter v2 (in-progress, not deployed)
+
+This branch adds a **local-only owner workflow** on top of the existing ATS
+collector, matching engine, Telegram digest, and private dashboard:
+
+- Successful configured ATS fetch marks the job `ATS_LISTED` (one source, no
+  independent employer-site verification). Optional rechecks distinguish
+  source outages from absent listings.
+- `python -m careerhunter.v2_workflow --db <EXISTING_LOCAL_SQLITE> verify ...`
+  persists conservative source evidence without falsely closing jobs.
+- `... cv ...` drafts a job-specific factual Markdown CV using a PRIVATE
+  JSON profile and writes it outside this public repository.
+- `... track --status applied --confirm-manual-event` only records a
+  manually completed application, stores the CV fingerprint and creates a
+  single seven-day follow-up; it NEVER sends an application or message.
+- The private read-only dashboard gains a job verification label and an
+  applications/follow-ups page after the corresponding code is deployed.
+
+Runbook: [V2 owner operations](docs/V2_OPERATOR_RUNBOOK.md).
+
+**Not production-complete:** Gmail read integration, LinkedIn browser work,
+application submission, DOCX/PDF exports, independently verified employer
+career-site corroboration, and live persistent CRM writes are NOT implemented
+by this branch. Production requires an explicitly approved merge/deployment
+plus the expiring free-Postgres migration review. Existing scan schedule is
+unchanged.
