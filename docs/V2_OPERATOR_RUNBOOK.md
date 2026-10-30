@@ -31,6 +31,20 @@ bulunmayan ilan veya zaman aşımı “sahte ilan” anlamına gelmez.
 Veritabanı içindeki `verification_observed_at` ve URL kanıtını kontrol et.
 Program `ATS_LISTED` dışındaki durumlarda sıfırdan farklı çıkış kodu verir.
 
+İşverenin yapılandırılmış kariyer sayfasında aynı ATS ilanına doğrudan
+link bulunup bulunmadığını ayrıca kontrol etmek için isteğe bağlı:
+
+```powershell
+python -m careerhunter.v2_workflow --db "C:\\private\\careerhunter.db" verify --source ashby --job-id "GERCEK_JOB_ID" --employer-check
+```
+
+Bu ikinci kontrol yalnızca GitHub'da önceden yapılandırılmış `team_url`
+sayfasından en fazla 500 KB HTML okur; JS çalıştırmaz veya redirect takip etmez.
+İlanda birebir aynı URL'ye doğrudan `<a href>` bağlantısı bulunursa
+`EMPLOYER_CONFIRMED` kaydı tutulur. JS tabanlı sayfa, olmayan link veya ağ
+hatası sahte ilan kanıtı sayılmaz; `ATS_LISTED` korunur.
+Günlük otomatik tarama henüz bu isteğe bağlı işlemi yapmaz.
+
 ### 2. Her ilana gerçek bilgilere dayalı taslak
 
 Özel JSON dosyasında `name`, `skills` listesi; tercihen `experience`,
