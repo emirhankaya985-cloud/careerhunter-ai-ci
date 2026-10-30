@@ -28,6 +28,7 @@ RESCORE_WORKFLOW = REPO + "/.github/workflows/personalize.yml@refs/heads/main"
 SMOKE_WORKFLOW = REPO + "/.github/workflows/nvidia-smoke.yml@refs/heads/main"
 TELEGRAM_SMOKE_WORKFLOW = REPO + "/.github/workflows/telegram-smoke.yml@refs/heads/main"
 TELEGRAM_REPORT_WORKFLOW = REPO + "/.github/workflows/telegram-report.yml@refs/heads/main"
+FOLLOWUP_WORKFLOW = REPO + "/.github/workflows/followup-reminder.yml@refs/heads/main"
 JWK_URL = ISSUER + "/.well-known/jwks"
 _jwks = PyJWKClient(JWK_URL, cache_jwk_set=True, lifespan=3600, timeout=10)
 _lock = threading.Lock()
@@ -420,3 +421,52 @@ def telegram_digest(request: Request) -> dict[str, object]:
         "threshold": threshold,
         "items": items,
     }
+
+
+@router.get("/internal/followups/due")
+def due_followups(request: Request) -> dict[str, object]:
+    """Bounded, read-only public-job followup summary for one signed GH workflow.
+
+    Never transfer email addresses, people, private notes, resume data or
+    database credentials to GitHub Actions.
+    """
+    _require_github_oidc(
+        request, workflow=FOLLOWUP_WORKFLOW,
+        events=frozenset({"schedule", "workflow_dispatch"}),
+    )
+    from datetime import datetime, timezone
+    from sqlalchemy import select
+    from .database import followups as followups_table, opportunities as opportunities_table
+    from .models import FollowUp, Opportunity
+    from .private_site import _get_engine
+
+    now = datetime.now(timezone.utc)
+    # Bounded read; PostgreSQL connection is in read-only transaction mode.
+    stmt = (
+        select(followups_table.c.payload, opportunities_table.c.payload)
+        .select_from(followups_table.join(
+            opportunities_table,
+            followups_table.c.opportunity_id == opportunities_table.c.opportunity_id,
+        ))
+        .where(followups_table.c.status == "pending")
+        .order_by(followups_table.c.due_at.asc())
+        .limit(500)
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(stmt).all()
+    due = []
+    for raw_followup, raw_opportunity in rows:
+        followup = FollowUp.model_validate_json(raw_followup)
+        opportunity = Opportunity.model_validate_json(raw_opportunity)
+        if followup.due_at.astimezone(timezone.utc) > now:
+            continue
+        if opportunity.status in {"closed", "rejected"}:
+            continue
+        # Only public job information, no original followup note or private person data.
+        due.append({
+            "title": opportunity.title[:90],
+            "company": opportunity.company[:70],
+            "job_url": str(opportunity.job_url) if opportunity.job_url else None,
+            "due_at": followup.due_at.astimezone(timezone.utc).date().isoformat(),
+        })
+    return {"status": "ready", "due_count": len(due), "items": due[:10], "bounded": True}
