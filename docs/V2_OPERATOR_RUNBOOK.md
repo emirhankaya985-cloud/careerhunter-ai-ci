@@ -188,3 +188,23 @@ Profil/başvuru notlarını GitHub Action çıktısına yazma.
 
 Bu özelliklerin GitHub CI kanıtı, Render'a canlı deploy edildiği veya
 üretim veri tabanı izinlerinin doğru ayarlandığı anlamına gelmez.
+
+
+## 8. Canlı v2 kabul testi (yalnızca dağıtımdan sonra)
+
+GitHub Actions `CareerHunter v2 Production Acceptance (read-only)`
+workflow'u `workflow_dispatch` ile manuel tetiklenir. GitHub runner'a
+Telegram tokenı, Gmail gizlisi ya da PostgreSQL şifresi **verilmez**.
+Kontroller:
+
+1. Canlı `/readyz` 200 + `ready` dönmeli.
+2. Anonymous istekler `/internal/owner/application-csrf`,
+   `/applications/new`, `/internal/followups/due` ve
+   `/internal/gmail/review-summary` uçlarından 401 almalı.
+3. Eski sürüm 404 dönerse bu özellikle FAIL anlamına gelir;
+   “CI yeşil = deploy tamam” diye yanlış sonuç çıkarılmamalı.
+
+Bu test, sahibiyle giriş yapıp gerçek CRM verisi yazmayı, backup/rollback
+kanıtını, gerçek Gmail OAuth yetkisini, özel Telegram mesajının görülmesini
+ve ilk zamanlanmış followup/Gmail koşusunu **kanıtlamaz**. Bunlar ayrı
+üretim kabul kapılarıdır.
