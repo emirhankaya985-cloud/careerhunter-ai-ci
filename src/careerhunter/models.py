@@ -35,6 +35,11 @@ class Job(BaseModel):
     status: Literal["new", "seen", "closed"] = "new"
     score_reasons: list[str] = Field(default_factory=list)
     gaps: list[str] = Field(default_factory=list)
+    verification_status: Literal["ATS_LISTED", "EMPLOYER_CONFIRMED", "REVIEW_REQUIRED",
+                                 "NOT_FOUND_AT_LAST_CHECK", "SOURCE_ERROR",
+                                 "CLOSED_CONFIRMED"] = "REVIEW_REQUIRED"
+    verification_observed_at: datetime | None = None
+    verification_evidence_url: HttpUrl | None = None
 
     @field_validator("job_id", "company", "title")
     @classmethod
