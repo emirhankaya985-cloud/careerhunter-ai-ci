@@ -9,6 +9,9 @@ on:
         type: choice
         default: rules
         options: [rules, ai]
+  # Only deterministic rules mode for scheduled runs; no NVIDIA/paid calls.
+  schedule:
+    - cron: '50 15 * * 2,5'
 
 permissions:
   contents: read
@@ -36,3 +39,21 @@ jobs:
           else
             python src/careerhunter/render_scan_client.py --rescore
           fi
+
+  alert_personalize_failure:
+    needs: backfill
+    if: always() && needs.backfill.result == 'failure' && github.event_name == 'schedule' && github.repository == 'emirhankaya985-cloud/careerhunter-ai-ci' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Telegram alert for failed scheduled personal re-ranking
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: PYTHONPATH=src python -m careerhunter.automation_alerts personalize
