@@ -15,6 +15,7 @@ from .database import DatabaseRepository, create_repository
 from .intelligence.company import build_company_signals
 from .intelligence.people import discover_public_contacts
 from .models import RunStats, utc_now
+from .verification import attest_collected
 from .notifications.ntfy import publish_run
 from .notifications.telegram import publish_daily_digest, publish_failure
 from .llm.provider import create_provider
@@ -77,7 +78,8 @@ class Orchestrator:
                                     retries=source_cfg.get("max_retries", 3),
                                     user_agent=source_cfg.get("user_agent", "CareerHunterAI/0.1"))
                 try:
-                    found = [matcher.score(job) for job in source.fetch(company["name"], slug)]
+                    found = [matcher.score(attest_collected(job))
+                             for job in source.fetch(company["name"], slug)]
                     jobs.extend(found)
                     if not dry_run:
                         stats.jobs_new += self.repo.upsert_jobs(found)
