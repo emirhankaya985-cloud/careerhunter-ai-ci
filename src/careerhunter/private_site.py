@@ -232,6 +232,8 @@ app = FastAPI(title="CareerHunter Private Dashboard", docs_url=None,
 
 
 app.include_router(scan_router)
+from .application_actions import router as application_router
+app.include_router(application_router)
 
 
 @app.middleware("http")
