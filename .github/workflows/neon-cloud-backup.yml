@@ -1,6 +1,5 @@
 name: CareerHunter Neon Cloud Backup (one-time)
 
-# Cutover verification snapshot 2026-10-31: fresh empty 'careerhunter_live' DB.
 # Copies production rows inside Render's trusted cloud network to an empty
 # Neon target. Never accesses the source DB from GitHub or a personal computer.
 on:
