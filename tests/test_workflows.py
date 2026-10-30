@@ -49,3 +49,18 @@ def test_optional_gmail_and_followup_jobs_are_main_branch_oidc_only():
     assert "DATABASE_URL" not in follow
     assert "telegram_mail_review" in mail
     assert "telegram_followups" in follow
+
+
+
+def test_v2_production_acceptance_is_manual_and_never_modifies_data():
+    target = ROOT / ".github/workflows/v2-production-acceptance.yml"
+    content = target.read_text(encoding="utf-8")
+    assert "workflow_dispatch:" in content
+    assert "schedule:" not in content
+    assert "id-token: write" not in content
+    assert "contents: read" in content
+    assert "DATABASE_URL" not in content
+    assert "secrets." not in content
+    assert "/internal/followups/due" in content
+    assert "/internal/gmail/review-summary" in content
+    assert "NO CLAIM:" in content
