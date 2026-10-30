@@ -258,6 +258,16 @@ def health() -> PlainTextResponse:
     return PlainTextResponse("ok")
 
 
+@app.get("/versionz")
+def version() -> PlainTextResponse:
+    """Deployment identity only: public commit SHA, never secrets or user data."""
+    sha = os.environ.get("RENDER_GIT_COMMIT", "").strip().lower()
+    if len(sha) != 40 or any(character not in "0123456789abcdef" for character in sha):
+        # A release must not be accepted if the deployed identity is unknown.
+        return PlainTextResponse("unknown", status_code=503)
+    return PlainTextResponse(sha)
+
+
 @app.get("/readyz")
 def ready() -> PlainTextResponse:
     """Readiness proves the configured database and minimum schema are readable."""
