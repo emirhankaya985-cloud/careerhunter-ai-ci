@@ -11,6 +11,11 @@ TEMPLATES = {
         "GitHub'daki haftalık otomasyon ve Telegram gönderim kayıtlarını kontrol et.",
         "weekly-production-report.yml",
     ),
+    "personalize": (
+        "⚠️ <b>CareerHunter AI | Kişisel ilan puanlama yenilemesi başarısız</b>\n"
+        "Ücretsiz kural tabanlı geçmiş ilan puanlama görevini GitHub kayıtlarından incele.",
+        "personalize.yml",
+    ),
     "country": (
         "⚠️ <b>CareerHunter AI | Dört ülke kaynak denetimi başarısız</b>\n"
         "ABD, Birleşik Krallık, Avustralya veya Türkiye için kaynak doğrulaması "
