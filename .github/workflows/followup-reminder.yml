@@ -1,0 +1,30 @@
+name: CareerHunter Due Application Followups
+
+# Owner-only private reminder, no DB password or person records in GitHub.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '10 8 * * *'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: careerhunter-owner-followups
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    if: github.repository == 'emirhankaya985-cloud/careerhunter-ai-ci' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Owner-only due application followups
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: PYTHONPATH=src python -m careerhunter.telegram_followups
