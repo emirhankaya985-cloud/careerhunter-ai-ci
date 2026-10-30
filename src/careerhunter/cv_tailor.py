@@ -95,6 +95,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--job", type=Path, required=True, help="JSON object containing a job")
     parser.add_argument("--output", type=Path, required=True, help="Local .md output path")
     args = parser.parse_args(argv)
+    root = Path(__file__).resolve().parents[2]
+    if args.profile.resolve().is_relative_to(root) or args.output.resolve().is_relative_to(root):
+        parser.error("Private profile and generated CV must be outside the public repository")
     if args.output.suffix.lower() != ".md":
         parser.error("Output must be .md; PDF/DOCX export is not implemented")
     profile, job = json.loads(args.profile.read_text(encoding="utf-8")), json.loads(
