@@ -71,6 +71,27 @@ jobs:
           assert "no-store" in headers.get("Cache-Control", ""), (
               "FAIL: private Telegram setup must prohibit caching")
           print("PASS: Telegram setup requires owner authentication")
+
+          # Verify newly deployed v2 routes really exist and are shielded.
+          # The old deployed app returns 404; public exposure returns 200.
+          for v2_path in (
+              "/internal/owner/application-csrf",
+              "/applications/new?source=ashby&job_id=smoke",
+              "/internal/followups/due",
+              "/internal/gmail/review-summary",
+          ):
+              request = urllib.request.Request(
+                  base + v2_path,
+                  headers={"User-Agent": "CareerHunter-CI-V2/1.0"})
+              try:
+                  with urllib.request.urlopen(request, timeout=40) as response:
+                      code = response.status
+              except urllib.error.HTTPError as exc:
+                  code = exc.code
+              if code != 401:
+                  raise SystemExit(
+                      f"FAIL: v2 route missing or public: {v2_path} HTTP={code}")
+          print("PASS: v2 owner and OIDC routes deployed, anonymous requests denied")
           PY
 
   report_failed_health:
