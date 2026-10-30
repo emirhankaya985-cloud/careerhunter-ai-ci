@@ -95,3 +95,38 @@ def test_session_rotation_invalidates_old_csrf(owner_client, monkeypatch):
     old = _auth(client)
     monkeypatch.setenv("DASHBOARD_PASSWORD", "new-test-owner-password-123456")
     assert _record(client, old).status_code == 401
+
+
+
+def test_owner_can_use_safe_no_js_application_form(owner_client):
+    client, db = owner_client
+    assert client.get("/applications/new?source=ashby&job_id=demo42").status_code == 401
+    _auth(client)
+    form = client.get("/applications/new?source=ashby&job_id=demo42")
+    assert form.status_code == 200 and "Manuel başvuru kaydı" in form.text
+    assert "İşverene" in form.text and "GÖNDERMEZ" in form.text
+    import re
+    token = re.search(r'name="csrf" value="([^"]+)"', form.text).group(1)
+    body = {"csrf": token, "source": "ashby", "job_id": "demo42",
+            "status": "applied", "confirmed": "true", "notes": "manual proof"}
+    assert client.post("/applications/submit", data=body,
+                       headers={"Origin": "https://testserver"},
+                       follow_redirects=False).status_code == 303
+    assert SQLiteRepository(db).list_opportunities()[0].status == "applied"
+    assert len(SQLiteRepository(db).list_followups()) == 1
+
+
+def test_no_js_form_rejects_missing_csrf_and_non_confirmed_event(owner_client):
+    client, db = owner_client
+    _auth(client)
+    unsigned = {"source": "ashby", "job_id": "demo42", "status": "applied",
+                "confirmed": "true"}
+    assert client.post("/applications/submit", data=unsigned,
+                       headers={"Origin": "https://testserver"}).status_code == 403
+    import re
+    token = re.search(r'name="csrf" value="([^"]+)"',
+                      client.get("/applications/new?source=ashby&job_id=demo42").text).group(1)
+    no_confirm = {**unsigned, "csrf": token, "confirmed": ""}
+    assert client.post("/applications/submit", data=no_confirm,
+                       headers={"Origin": "https://testserver"}).status_code == 422
+    assert SQLiteRepository(db).list_opportunities() == []
