@@ -2,6 +2,7 @@ name: CareerHunter Neon Cloud Backup (one-time)
 
 # Copies production rows inside Render's trusted cloud network to an empty
 # Neon target. Never accesses the source DB from GitHub or a personal computer.
+# Each guarded run needs a distinct empty target; it refuses to overwrite data.
 on:
   workflow_dispatch:
   push:
