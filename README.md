@@ -77,3 +77,17 @@ career-site corroboration, and live persistent CRM writes are NOT implemented
 by this branch. Production requires an explicitly approved merge/deployment
 plus the expiring free-Postgres migration review. Existing scan schedule is
 unchanged.
+
+
+### Automation additions pending production deployment
+
+- Optional bounded offline recruitment email review and read-only Gmail OAuth
+  API scanner; never sends, modifies, or exposes email content. Gmail OAuth is
+  not configured or live-verified.
+- Optional daily OIDC-protected application followup digest for private Telegram.
+- Opt-in `.github/workflows/gmail-review.yml` and
+  `.github/workflows/followup-reminder.yml`; first schedule and actual
+  private Telegram delivery must be proven *after* merge and Render deployment.
+
+See [v2 operator guide](docs/V2_OPERATOR_RUNBOOK.md). All optional runtime
+secrets belong in Render environment and must never be committed.
