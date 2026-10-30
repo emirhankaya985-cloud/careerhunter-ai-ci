@@ -15,7 +15,6 @@ from email import policy
 from email.message import EmailMessage
 from email.parser import BytesParser
 from pathlib import Path
-from typing import Iterable
 
 MAX_EMAIL_BYTES = 1_000_000
 MAX_MESSAGES = 500
