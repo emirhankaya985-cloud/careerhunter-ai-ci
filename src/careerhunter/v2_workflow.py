@@ -7,6 +7,7 @@ Production PostgreSQL and deployment are separate, approval-gated tasks.
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 import hashlib
 import json
 import sys
@@ -16,6 +17,7 @@ from pathlib import Path
 from .config import load_yaml
 from .cv_tailor import tailor_cv
 from .database import SQLiteRepository
+from .employer_corroboration import check_employer_page
 from .models import FollowUp, Job, Opportunity, utc_now
 from .verification import apply_evidence, verify_from_config
 
@@ -97,6 +99,9 @@ def parser() -> argparse.ArgumentParser:
         p = commands.add_parser(name)
         p.add_argument("--source", choices=SOURCES, required=True)
         p.add_argument("--job-id", required=True)
+        if name == "verify":
+            p.add_argument("--employer-check", action="store_true",
+                           help="Optional bounded exact-link check on configured careers page")
         if name == "cv":
             p.add_argument("--profile", type=Path, required=True)
             p.add_argument("--output", type=Path, required=True)
@@ -122,10 +127,25 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         job = _load_job(repo, args.source, args.job_id)
         if args.command == "verify":
-            result = verify_from_config(job, load_yaml("companies.yaml").get("companies", []))
+            companies = load_yaml("companies.yaml").get("companies", [])
+            result = verify_from_config(job, companies)
+            if result.status == "ATS_LISTED" and args.employer_check:
+                pages = [
+                    str(c["team_url"]) for c in companies
+                    if str(c.get("name", "")).casefold() == job.company.casefold()
+                    and c.get("team_url")
+                ]
+                if len(pages) == 1:
+                    corroboration = check_employer_page(pages[0], result.job_url)
+                    if corroboration.verified:
+                        result = replace(
+                            result, status="EMPLOYER_CONFIRMED",
+                            feed_url=corroboration.page_url,
+                            reason=corroboration.reason,
+                        )
             repo.update_job_evidence(apply_evidence(job, result))
             print(json.dumps(result.to_dict(), sort_keys=True))
-            return 0 if result.status == "ATS_LISTED" else 2
+            return 0 if result.status in {"ATS_LISTED", "EMPLOYER_CONFIRMED"} else 2
         if args.command == "cv":
             private_profile = _private_file(args.profile)
             private_output = _private_file(args.output)
