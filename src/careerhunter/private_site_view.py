@@ -114,6 +114,7 @@ nav .links{display:flex;flex-wrap:wrap}.sidebarbottom,.tiny{display:none}main{pa
 <a class="navlink {% if view=='overview' %}selected{% endif %}" href="/">◈ &nbsp; Genel Bakış</a>
 <a class="navlink {% if view=='jobs' %}selected{% endif %}" href="/?view=jobs">⌕ &nbsp; İş İlanları</a>
 <a class="navlink {% if view=='people' %}selected{% endif %}" href="/?view=people">♧ &nbsp; Kişiler ve Taslaklar</a>
+<a class="navlink {% if view=='applications' %}selected{% endif %}" href="/?view=applications">◷ &nbsp; Başvurular ve Takipler</a>
 </div></div>
 <div class="sidebarbottom">◉ Özel oturum açık
 <form method="post" action="/logout"><button class="logout" type="submit">Güvenli çıkış ↗</button></form>
@@ -161,7 +162,14 @@ nav .links{display:flex;flex-wrap:wrap}.sidebarbottom,.tiny{display:none}main{pa
 <div class="row"><a class="pagebtn" href="/?view=jobs&sort=fit&q={{ query|urlencode }}">🎯 En uygun ilanlar {% if sort=="fit" %}✓{% endif %}</a><a class="pagebtn" href="/?view=jobs&sort=recent&q={{ query|urlencode }}">🕓 En yeni ilanlar {% if sort=="recent" %}✓{% endif %}</a></div>
 <p class="small muted">Puan kişisel profil eşleşmesidir; vize ve uzaktan çalışma uygunluğu ayrıca doğrulanır.</p>
 <div class="tablewrap"><table><thead><tr><th>POZİSYON</th><th>ŞİRKET</th><th>KONUM</th><th>PUAN</th><th>KAYNAK</th></tr></thead><tbody>
-{% for j in job_rows %}<tr><td><strong>{{ j.title }}</strong><div class="small muted">{{ j.source }} · {{ j.job_id }}</div></td><td>{{ j.company }}</td><td>{{ j.location }}</td>
+{% for j in job_rows %}<tr><td><strong>{{ j.title }}</strong><div class="small muted">{{ j.source }} · {{ j.job_id }}</div><div class="small muted">İlan kanıtı:
+{% if j.verification_status == "ATS_LISTED" %}ATS listesinde görüldü
+{% elif j.verification_status == "EMPLOYER_CONFIRMED" %}Şirket sayfasında ayrıca doğrulandı
+{% elif j.verification_status == "NOT_FOUND_AT_LAST_CHECK" %}Son kontrolde bulunamadı
+{% elif j.verification_status == "SOURCE_ERROR" %}Kaynak hatası — teyit gerekli
+{% elif j.verification_status == "CLOSED_CONFIRMED" %}Kapanış doğrulandı
+{% else %}Henüz doğrulanmadı{% endif %}</div>
+{% if j.verification_evidence_url %}<div><a class="link small" href="{{ j.verification_evidence_url|safe_href }}" target="_blank" rel="noopener noreferrer">ATS kanıtını aç ↗</a></div>{% endif %}</td><td>{{ j.company }}</td><td>{{ j.location }}</td>
 <td><span class="tag">{{ j.match_score if j.match_score is not none else "—" }}/100</span><div class="small muted">{{ "AI analizi" if j.match_method == "llm" else "Profil puanı" }}</div><div class="small muted">{{ "Türkiye: uygun kanıt" if j.eligibility_status == "eligible" else "Türkiye: uygun değil" if j.eligibility_status == "ineligible" else "Çalışma koşulu: teyit gerekli" }}</div><details><summary class="small">Neden bu puan?</summary>{% for reason in j.score_reasons[:5] %}<div class="small muted">{{ reason }}</div>{% endfor %}</details></td>
 <td><a class="link" href="{{ j.job_url|safe_href }}" target="_blank" rel="noopener noreferrer">İlana git ↗</a></td></tr>{% else %}<tr><td colspan="5" class="empty">Bu aramada sonuç bulunamadı.</td></tr>{% endfor %}
 </tbody></table></div>
@@ -169,6 +177,22 @@ nav .links{display:flex;flex-wrap:wrap}.sidebarbottom,.tiny{display:none}main{pa
 {% if page>1 %}<a class="pagebtn" href="/?view=jobs&q={{ query|urlencode }}&sort={{ sort }}&page={{ page-1 }}">← Önceki</a>{% endif %}
 {% if has_next %}<a class="pagebtn" href="/?view=jobs&q={{ query|urlencode }}&sort={{ sort }}&page={{ page+1 }}">Sonraki →</a>{% endif %}
 </div></section>
+{% elif view=='applications' %}
+<section class="panel"><h2>📋 Başvuru kayıtları</h2>
+<p class="muted">Bu panel salt okunurdur. “Başvuruldu” durumu yalnızca kullanıcı tarafından doğrulanmış manuel kayıtları gösterir; bu sistem üzerinden otomatik gönderim yapılmaz.</p>
+<div class="tablewrap"><table><thead><tr><th>POZİSYON</th><th>ŞİRKET</th><th>DURUM</th><th>BAŞVURU TARİHİ</th><th>İLAN</th></tr></thead><tbody>
+{% for a in applications %}<tr><td><strong>{{ a.title }}</strong><div class="small muted">{{ a.opportunity_id }}</div></td><td>{{ a.company }}</td>
+<td><span class="tag">{{ a.status }}</span>{% if a.cv_sha256 %}<div class="small muted">CV özeti kayıtlı</div>{% endif %}</td>
+<td>{{ a.applied_at.strftime("%Y-%m-%d") if a.applied_at else "—" }}</td>
+<td>{% if a.job_url %}<a class="link" href="{{ a.job_url|safe_href }}" target="_blank" rel="noopener noreferrer">İlana git ↗</a>{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="empty">Manuel başvuru henüz kaydedilmedi.</td></tr>{% endfor %}
+</tbody></table></div></section>
+<section class="panel"><h2>⏰ Bekleyen takipler</h2>
+<div class="tablewrap"><table><thead><tr><th>SON TARİH</th><th>İLİŞKİLİ BAŞVURU</th><th>NOT</th></tr></thead><tbody>
+{% for f in followups %}<tr><td>{{ f.due_at.strftime("%Y-%m-%d") }}</td>
+<td>{{ f.opportunity_id or "Kişi takip kaydı" }}</td><td>{{ f.note }}</td></tr>
+{% else %}<tr><td colspan="3" class="empty">Bekleyen takip bulunmuyor.</td></tr>{% endfor %}
+</tbody></table></div></section>
 {% elif view=='people' %}
 <div class="panel"><h2>👥 Kişi kayıtları ve kişisel mesajlar</h2>
 <p class="muted">Her kartta bulunan kaynak ve hazırlanmış mesajı inceleyebilirsin.
