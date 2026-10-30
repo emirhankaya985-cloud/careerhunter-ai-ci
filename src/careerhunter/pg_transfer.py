@@ -83,10 +83,19 @@ def _fingerprint(connection: Connection, table) -> tuple[int, str]:
 
 
 def transfer(source_url: str, target_url: str, *, apply: bool = False,
-             backup_confirmed: bool = False, allow_sqlite_tests: bool = False) -> dict:
+             backup_confirmed: bool = False, allow_sqlite_tests: bool = False,
+             create_first_cloud_backup: bool = False) -> dict:
     """Preserve all tables; source SELECT-only, target writes only on explicit apply."""
     source_url, target_url = _check_urls(source_url, target_url, allow_sqlite_tests)
-    if apply and not backup_confirmed:
+    # The very first cloud snapshot is itself a backup, never a cutover:
+    # source is SELECT-only, destination must be empty, and every row is
+    # fingerprint-checked before the destination transaction commits.
+    if create_first_cloud_backup:
+        target_host = (make_url(target_url).host or "").lower()
+        if not apply or not target_host.endswith(".neon.tech"):
+            if not allow_sqlite_tests or not apply:
+                raise ValueError("Cloud backup requires an empty Neon PostgreSQL target")
+    if apply and not (backup_confirmed or create_first_cloud_backup):
         raise ValueError("A verified independent backup is required before --apply")
     source_options = (
         {"connect_args": {"options": "-c default_transaction_read_only=on"}}
@@ -133,7 +142,8 @@ def transfer(source_url: str, target_url: str, *, apply: bool = False,
                         )
             return {"mode": "copied-and-verified", "source_counts": counts,
                     "target_counts": {k: v[0] for k, v in fingerprints.items()},
-                    "data_copied": True, "production_cutover_performed": False}
+                    "data_copied": True, "cloud_backup_created": bool(create_first_cloud_backup),
+                    "production_cutover_performed": False}
     finally:
         source.dispose()
         target.dispose()
