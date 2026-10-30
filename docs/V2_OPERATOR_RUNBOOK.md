@@ -160,3 +160,31 @@ gönderir. Eksik OAuth kimliği varsa FAIL, güvenli fail-closed olur.
 Bu özellik için gerçek hesap yetkilendirmesi ve canlı kanıt **henüz yok**.
 Ayrıca taslaklar otomatik iş başvurusuna, CRM durumuna veya e-posta yanıtına
 dönüşmez. Ret/mülakat tespiti yalnızca ön inceleme sinyalidir.
+
+
+## 7. Canlı kullanıcı kontrollü CRM kayıt ekranı
+
+PR #5'te `/?view=jobs` ilan tablosundaki **Manuel kaydet** bağlantısı
+`/applications/new` formunu açar. Sadece şifreli oturuma sahip kullanıcı,
+gerçek harici olayı doğruladıktan sonra sisteme kaydedebilir. Formda
+yerel JavaScript zorunluluğu bulunmaz; POST signed session + 20 dakikalık
+CSRF + same-origin koşullarına bağlıdır.
+
+Daha teknik kullanıcılar için `GET /internal/owner/application-csrf` ve
+`POST /internal/owner/application` JSON API'si de var, ama ikisi de
+owner-session korumalıdır. **Bu bir iş başvuru gönderme API'si değildir.**
+
+Varsayılan olarak CRM yazımı **KAPALI**. Sahip ayrı least-privilege PostgreSQL
+rolü oluşturup yalnızca Render Environment içinde
+`CAREERHUNTER_CRM_DATABASE_URL` girince çalışabilir. Bu rol yalnızca
+`jobs` tablosuna SELECT, `opportunities` ve `followups` tablolarına
+ilgili SELECT/INSERT/UPDATE yetkilerine sahip olmalı; schema/DDL/admin erişimi
+olmamalı. Arayüzün `DASHBOARD_DATABASE_URL` rolü read-only kalır.
+Production'da SQLite yazma seçeneği reddedilir.
+
+Eksik ya da yanlış ayarda 503 ile fail-closed davranır. Gerçek veri üzerinde
+yetki testleri ve canlı form smoke, deploy sonrasında ayrıca yapılmalıdır.
+Profil/başvuru notlarını GitHub Action çıktısına yazma.
+
+Bu özelliklerin GitHub CI kanıtı, Render'a canlı deploy edildiği veya
+üretim veri tabanı izinlerinin doğru ayarlandığı anlamına gelmez.
