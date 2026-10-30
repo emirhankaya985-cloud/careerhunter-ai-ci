@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import os
 import re
 from collections import Counter
@@ -92,6 +93,6 @@ def read_readonly(*, max_results: int = 20, client: httpx.Client | None = None) 
                     seen.add(signal.id_hash)
                     signals.append(signal)
             return summarize(signals)
-    except (httpx.HTTPError, ValueError, TypeError, KeyError, UnicodeError):
+    except (httpx.HTTPError, ValueError, TypeError, KeyError, UnicodeError, binascii.Error):
         # Never print API exceptions, tokens, senders or raw message bodies.
         raise RuntimeError("Gmail readonly fetch failed") from None
