@@ -1,0 +1,32 @@
+name: CareerHunter Neon Cloud Backup (one-time)
+
+# Copies production rows inside Render's trusted cloud network to an empty
+# Neon target. Never accesses the source DB from GitHub or a personal computer.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/neon-cloud-backup.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: careerhunter-production-collector
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    if: github.repository == 'emirhankaya985-cloud/careerhunter-ai-ci' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: One-time cloud snapshot, SHA-independent and source read-only
+        shell: bash
+        run: python src/careerhunter/cloud_backup_client.py
