@@ -11,7 +11,20 @@ from render_scan_client import call, wait_ready
 def main() -> int:
     wait_ready()
     try:
-        status = call("/internal/cloud-backup/preflight")
+        # Render may deploy the reviewed main commit after GitHub's push
+        # workflow starts. Retry 404 only; credentials/configuration failures
+        # are not treated as deployment warmup.
+        status = None
+        for attempt in range(30):
+            try:
+                status = call("/internal/cloud-backup/preflight")
+                break
+            except RuntimeError as exc:
+                if "returned HTTP 404" not in str(exc) or attempt == 29:
+                    raise
+                time.sleep(20)
+        if status is None:
+            raise RuntimeError("Cloud backup preflight was not deployed")
         if status.get("mode") != "preflight" or not status.get("target_empty"):
             raise RuntimeError("No safe empty Neon backup target")
         print("PASS: Render source is readable; Neon backup target is empty")
