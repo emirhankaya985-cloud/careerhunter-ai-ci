@@ -50,6 +50,15 @@ jobs:
               raise SystemExit("FAIL: v2 live PostgreSQL readiness absent")
           print("PASS: live app and PostgreSQL ready")
 
+          # No claim of new code running unless Render's actual git commit
+          # matches the exact main commit that triggered this acceptance.
+          expected = os.environ.get("GITHUB_SHA", "").strip().lower()
+          code, deployed = get("/versionz")
+          if (len(expected) != 40 or code != 200
+                  or deployed.strip().lower() != expected):
+              raise SystemExit("FAIL: Render live commit differs from tested GitHub main")
+          print("PASS: Render runtime exactly matches GitHub release SHA")
+
           # These routes return auth failure *only* when the v2 API code
           # has actually been deployed. Old versions return 404.
           for path in (
