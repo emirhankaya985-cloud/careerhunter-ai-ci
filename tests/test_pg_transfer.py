@@ -120,8 +120,8 @@ def test_cloud_backup_always_refuses_overwriting_target(tmp_path):
                  allow_sqlite_tests=True)
 
 
-def test_first_cloud_backup_requires_a_real_neon_postgres_target(tmp_path):
-    src, dst = urls(tmp_path)
-    seed(src)
+def test_first_cloud_backup_requires_a_real_neon_postgres_target():
+    source = "postgresql://reader:example@render.internal/careerhunter"
+    wrong_target = "postgresql://writer:example@outside.example/emptydb"
     with pytest.raises(ValueError, match="Neon PostgreSQL"):
-        transfer(src, dst, apply=True, create_first_cloud_backup=True)
+        transfer(source, wrong_target, apply=True, create_first_cloud_backup=True)
