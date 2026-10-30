@@ -7,6 +7,8 @@ on:
       - "src/careerhunter/**"
       - "tests/test_e2e_workflow.py"
       - ".github/workflows/e2e-verification.yml"
+  schedule:
+    - cron: '55 8 * * *'
 
 permissions:
   contents: read
@@ -67,3 +69,21 @@ jobs:
         run: |
           cat reports/live-proof/fixture-e2e.log >> "$GITHUB_STEP_SUMMARY" || true
           cat reports/live-proof/verification.json >> "$GITHUB_STEP_SUMMARY" || true
+
+  alert_country_failure:
+    needs: verify
+    if: always() && needs.verify.result == 'failure' && github.event_name == 'schedule' && github.repository == 'emirhankaya985-cloud/careerhunter-ai-ci' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Telegram alert when any target country loses all healthy ATS feeds
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: PYTHONPATH=src python -m careerhunter.automation_alerts country
