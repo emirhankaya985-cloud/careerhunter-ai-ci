@@ -1,0 +1,52 @@
+name: CareerHunter Daily Recovery Guard
+
+# Independent safeguard: recovers one missed/failed daily scan at most once a day.
+# All times UTC. Normal collection is 06:17 UTC; guard runs after the window.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '40 8 * * *'
+    - cron: '20 15 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: careerhunter-production-recovery-guard
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    if: github.repository == 'emirhankaya985-cloud/careerhunter-ai-ci' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Detect missing, in-progress, retried and failed daily scans
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python src/careerhunter/daily_recovery_guard.py
+
+  alert_if_guard_fails:
+    needs: guard
+    if: always() && needs.guard.result == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Telegram recovery-guard failure alert
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: PYTHONPATH=src python -m careerhunter.daily_recovery_alert
