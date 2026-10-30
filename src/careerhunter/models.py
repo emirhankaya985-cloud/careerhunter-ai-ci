@@ -35,6 +35,11 @@ class Job(BaseModel):
     status: Literal["new", "seen", "closed"] = "new"
     score_reasons: list[str] = Field(default_factory=list)
     gaps: list[str] = Field(default_factory=list)
+    verification_status: Literal["ATS_LISTED", "EMPLOYER_CONFIRMED", "REVIEW_REQUIRED",
+                                 "NOT_FOUND_AT_LAST_CHECK", "SOURCE_ERROR",
+                                 "CLOSED_CONFIRMED"] = "REVIEW_REQUIRED"
+    verification_observed_at: datetime | None = None
+    verification_evidence_url: HttpUrl | None = None
 
     @field_validator("job_id", "company", "title")
     @classmethod
@@ -134,6 +139,9 @@ class Opportunity(BaseModel):
     status: Literal["discovered", "reviewed", "applied", "interview", "offer", "rejected", "closed"] = "discovered"
     fit_score: int | None = Field(default=None, ge=0, le=100)
     notes: str | None = None
+    applied_at: datetime | None = None
+    cv_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    submission_evidence_url: HttpUrl | None = None
     updated_at: datetime = Field(default_factory=utc_now)
 
 

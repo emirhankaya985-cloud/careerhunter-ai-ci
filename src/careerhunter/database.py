@@ -268,6 +268,26 @@ class DatabaseRepository:
             payloads = connection.execute(statement).scalars().all()
         return [Job.model_validate_json(payload) for payload in payloads]
 
+    def get_job(self, source: str, job_id: str) -> Job | None:
+        """Find an exact source/job_id pair, not an ambiguous title match."""
+        with self.engine.connect() as connection:
+            value = connection.execute(select(jobs.c.payload).where(
+                jobs.c.source == source, jobs.c.job_id == job_id
+            )).scalar_one_or_none()
+        return Job.model_validate_json(value) if value else None
+
+    def update_job_evidence(self, job: Job) -> bool:
+        """Persist verification evidence only; never imply submission or closure."""
+        payload, digest = self._job_payload(job)
+        values = {"payload": payload, "content_hash": digest}
+        if job.verification_status in {"ATS_LISTED", "EMPLOYER_CONFIRMED"} and job.verification_observed_at:
+            values["last_verified_at"] = job.verification_observed_at.isoformat()
+        with self.engine.begin() as connection:
+            result = connection.execute(update(jobs).where(
+                jobs.c.source == job.source, jobs.c.job_id == job.job_id
+            ).values(**values))
+        return bool(result.rowcount)
+
     def count_new_jobs_since(self, since: datetime) -> int:
         """Count unique jobs first observed since ``since`` by (source, job_id)."""
         cutoff = since.astimezone(timezone.utc).isoformat()
@@ -419,6 +439,13 @@ class DatabaseRepository:
         with self.engine.connect() as connection:
             payloads = connection.execute(statement).scalars().all()
         return [Opportunity.model_validate_json(payload) for payload in payloads]
+
+    def get_opportunity(self, opportunity_id: str) -> Opportunity | None:
+        with self.engine.connect() as connection:
+            value = connection.execute(select(opportunities.c.payload).where(
+                opportunities.c.opportunity_id == opportunity_id
+            )).scalar_one_or_none()
+        return Opportunity.model_validate_json(value) if value else None
 
     def record_interaction(self, interaction: Interaction) -> None:
         with self.engine.begin() as connection:

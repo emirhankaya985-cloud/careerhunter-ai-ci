@@ -1,0 +1,210 @@
+# CareerHunter AI v2 — güvenli işletim kılavuzu
+
+Bu dalda çalışan ilk v2 özellikleri: ATS kaynak kanıtı, özel CV taslağı, kullanıcı onaylı
+manuel başvuru kaydı ve 7 günlük takip. Bunlar **otomatik başvuru** değildir.
+Özel Render panelinde başvuru/takip ekranı ve ilan kanıt durumu **salt okunur** sunulur.
+
+## Kurulum ve güvenlik
+
+- Python 3.11+, `python -m pip install -e '.[dev]'`.
+- Yerel SQLite dosyası **mevcut** olmalı. Test için `careerhunter run --slot jobs`
+  ancak gerçek ATS ve doğru profili kullanarak oluşturur; yanlış profille tarama yapma.
+- Prod PostgreSQL verisi otomatik dışa aktarılmaz; yetkili bir export gerekiyorsa
+  güvenli, şifreli özel yedek üzerinden ilerle.
+- Aşağıdaki `--profile`, `--output`, `--cv-file` dosyaları **public deponun
+  dışında**, özel yerel klasörde tutulmalıdır. Gerçek ad, iletişim veya CV
+  bilgilerini GitHub'a commit etme.
+- Profil JSON yalnızca doğrulanmış beceriler, eğitim, proje ve deneyim alanlarından
+  oluşmalı. `config/profile.yaml` demo verisidir.
+
+### 1. İlanı tekrar kontrol et
+
+```powershell
+python -m careerhunter.v2_workflow --db "C:\private\careerhunter.db" verify --source ashby --job-id "GERCEK_JOB_ID"
+```
+
+Çıktı JSON kanıtı ve kaydedilen durum: `ATS_LISTED`,
+`NOT_FOUND_AT_LAST_CHECK`, `SOURCE_ERROR` ya da `REVIEW_REQUIRED`.
+`ATS_LISTED` = yapılandırılan *aynı* ATS kaynağında job_id yeniden görüldü.
+**İşveren kariyer sitesinde bağımsız doğrulama değildir.** Son kontrolde
+bulunmayan ilan veya zaman aşımı “sahte ilan” anlamına gelmez.
+Veritabanı içindeki `verification_observed_at` ve URL kanıtını kontrol et.
+Program `ATS_LISTED` dışındaki durumlarda sıfırdan farklı çıkış kodu verir.
+
+İşverenin yapılandırılmış kariyer sayfasında aynı ATS ilanına doğrudan
+link bulunup bulunmadığını ayrıca kontrol etmek için isteğe bağlı:
+
+```powershell
+python -m careerhunter.v2_workflow --db "C:\\private\\careerhunter.db" verify --source ashby --job-id "GERCEK_JOB_ID" --employer-check
+```
+
+Bu ikinci kontrol yalnızca GitHub'da önceden yapılandırılmış `team_url`
+sayfasından en fazla 500 KB HTML okur; JS çalıştırmaz veya redirect takip etmez.
+İlanda birebir aynı URL'ye doğrudan `<a href>` bağlantısı bulunursa
+`EMPLOYER_CONFIRMED` kaydı tutulur. JS tabanlı sayfa, olmayan link veya ağ
+hatası sahte ilan kanıtı sayılmaz; `ATS_LISTED` korunur.
+Günlük otomatik tarama henüz bu isteğe bağlı işlemi yapmaz.
+
+### 2. Her ilana gerçek bilgilere dayalı taslak
+
+Özel JSON dosyasında `name`, `skills` listesi; tercihen `experience`,
+`projects`, `education`, `languages` alanları bulunur. Örnek isimler
+ve deneyimler yalnızca testlerde kullanılmalı.
+
+```powershell
+python -m careerhunter.v2_workflow --db "C:\private\careerhunter.db" cv --source ashby --job-id "GERCEK_JOB_ID" --profile "C:\private\profile.json" --output "C:\private\cv-job42.md"
+```
+
+CV tek sütunlu Markdown olarak oluşturulur; gerçek PDF/DOCX aktarımı bu aşamada
+yok. Kod, ilan açıklamasındaki eksik becerileri kullanıcıya eklemez.
+Bir ATS'nin belgeyi kabul edeceği garanti değildir.
+
+### 3. Gerçekte yaptığın başvuruyu kaydet
+
+Sadece *inceledim* için:
+
+```powershell
+python -m careerhunter.v2_workflow --db "C:\private\careerhunter.db" track --source ashby --job-id "GERCEK_JOB_ID" --status reviewed
+```
+
+İlgili işverenin sisteminde başvuruyu **gerçekten gönderdiysen**:
+
+```powershell
+python -m careerhunter.v2_workflow --db "C:\private\careerhunter.db" track --source ashby --job-id "GERCEK_JOB_ID" --status applied --confirm-manual-event --cv-file "C:\private\cv-job42.md"
+```
+
+Bu işlem kimseye CV veya mesaj göndermez. CV içeriği değil SHA-256 özeti,
+manuel başvuru tarihi ve 7 günlük takip saklanır. Aynı işlem tekrarlandığında
+tarih / takip kaydı çoğaltılmaz. Diğer olaylar `interview`, `offer`,
+`rejected`, `closed` için de `--confirm-manual-event` gerekir.
+`--proof-url` kamuya açık olmayan hassas link içerebilir; gerektiğinde boş bırak.
+
+Kayıtları yerelde gör:
+
+```powershell
+python -m careerhunter.v2_workflow --db "C:\private\careerhunter.db" list
+```
+
+## Canlı üretim kabul ölçütleri
+
+1. `ruff check .`, `pytest -q`, disposable PostgreSQL CI job'u: PASS.
+2. Önce backup/restore, bağlantı izinleri, free-tier süre ve quota denetimi;
+   açık Neon migration PR #1'i bağımsız değerlendir.
+3. Merge sonrası Render gerçekten aynı commit'i dağıtmış olmalı. Yalnızca
+   GitHub CI PASS olması deployment değildir.
+4. `/readyz` canlı DB tablolarını sorgulayabilmeli; güvenli login sonrası
+   `/?view=jobs` kaynak kanıtı ve `/?view=applications` CRM durumlarını göstermeli.
+5. Günlük 09:17 TRT tarama gerçek ATS kayıtları işlemeli. Telegram test mesajı
+   kabulü ile sahibin telefonu üzerinde teslim ayrı kanıtlandırılmalı.
+6. Gmail ve LinkedIn bağlantısı bu PR kapsamında **yoktur**. Gerçek mesaj
+   veya otomatik başvuru gönderme bu projede kapalıdır.
+
+**Önemli:** Dashboard read-only PostgreSQL bağlantısı CRM'e yazamaz. Yukarıdaki
+`v2_workflow` CLI mevcut aşamada yalnızca yerel SQLite üzerindeki kayıtları
+yönetir. Canlı CRM yazma yetkisi için kimlik doğrulamalı, CSRF korumalı, düşük
+yetkili özel API ayrı güvenlik incelemesi ve kullanıcı onayı gerektirir.
+
+## 4. Gelen e-postaların salt-okunur sınıflandırılması
+
+Gmail ile canlı bağlantı bu dalda mevcut değil. Ayrı bir özel klasöre manuel
+kaydedilmiş `.eml` dosyaları, herhangi bir hesap erişimi veya ağ çağrısı
+olmadan değerlendirilebilir:
+
+```powershell
+python -m careerhunter.inbox_review --eml-dir "C:\\private\\career-mail" --output "C:\\private\\mail-review.json"
+```
+
+Çıktı yalnızca Message-ID hash'i ve önerilen `interview`, `assessment`,
+`rejection` ya da `needs_review` statüsünü içerir. Her kayıt mutlaka insan
+incelemesine ihtiyaç duyar; otomatik ret, otomatik başvuru veya cevap yoktur.
+Alıntılanmış eski ileti bölümleri mümkün olduğunda dışlanır. Gmail OAuth,
+yetkili posta okuma, senkronizasyon imleci ve izinler daha sonra kurulmalıdır.
+
+## 5. Otomatik takip hatırlatması (dağıtıldıktan sonra)
+
+`.github/workflows/followup-reminder.yml` her gün `08:10 UTC` (11:10
+Türkiye saati) için planlıdır. İşlem, yalnızca özel
+`/internal/followups/due` salt-okunur OIDC endpoint'inden gecikmiş başvuru
+takiplerinin genel iş unvanı / şirket bilgilerini çeker ve Telegram özel
+sohbetine tek özet gönderir. Kimseye e-posta göndermez, CRM durumunu değiştirmez.
+OIDC token'ı yalnızca exact main-branch workflow kimliğiyle kabul edilir;
+ek secrets Render'a aktarılmaz. Retry kaynaklı çift mesajı engellenir.
+
+**Gerçek çalışma henüz kanıtlanmadı:** Bu değişiklikler PR #5'te. Günlük
+planın gerçekten çalışması için main'e merge ve Render deploy sonrasında
+en az bir schedule+Telegram canlı kanıtı gerekir. Yerel CLI ile girilen
+başvuru kayıtları otomatik olarak Render veritabanına aktarılmaz; canlı
+hatırlatmalar yalnızca o üretim veritabanında bulunan takipleri görür.
+
+## 6. Gmail API ile canlı salt-okunur pilot (yalnızca OAuth sonrası)
+
+`src/careerhunter/gmail_reader.py`, mesaj listesini Gmail API üzerinden
+okur ve yalnızca inceleme önerilerinin sayısını döndürür. Kişisel e-postalar,
+sender, subject, Gmail message id, bot token veya CV çıktıda bulunmaz.
+Kullanıcı en az yetkili **gmail.readonly** OAuth izniyle Google hesabını
+bağlamadan çalıştırılmaz. SMTP, Gmail send/modify/delete endpoint'i yoktur.
+
+Güvenli Render Environment gizlileri:
+- `GMAIL_READONLY_CLIENT_ID`
+- `GMAIL_READONLY_CLIENT_SECRET`
+- `GMAIL_READONLY_REFRESH_TOKEN`
+
+Önce `CAREERHUNTER_GMAIL_READONLY_ENABLED=true` Render ortamında açılır.
+Ardından GitHub Actions repository variable
+`CAREERHUNTER_GMAIL_REVIEW_ENABLED=true` etkinleştirilir. Böylece
+`gmail-review.yml` her gün 08:50 UTC (11:50 Türkiye saati) çalışır.
+İşlem yalnızca 20 son-24-saat INBOX iletisini okuyup Telegram'a özet sayılar
+gönderir. Eksik OAuth kimliği varsa FAIL, güvenli fail-closed olur.
+Önce gerçek OAuth yetkileri ve Gizlilik/KVKK gereksinimlerini doğrula.
+
+Bu özellik için gerçek hesap yetkilendirmesi ve canlı kanıt **henüz yok**.
+Ayrıca taslaklar otomatik iş başvurusuna, CRM durumuna veya e-posta yanıtına
+dönüşmez. Ret/mülakat tespiti yalnızca ön inceleme sinyalidir.
+
+
+## 7. Canlı kullanıcı kontrollü CRM kayıt ekranı
+
+PR #5'te `/?view=jobs` ilan tablosundaki **Manuel kaydet** bağlantısı
+`/applications/new` formunu açar. Sadece şifreli oturuma sahip kullanıcı,
+gerçek harici olayı doğruladıktan sonra sisteme kaydedebilir. Formda
+yerel JavaScript zorunluluğu bulunmaz; POST signed session + 20 dakikalık
+CSRF + same-origin koşullarına bağlıdır.
+
+Daha teknik kullanıcılar için `GET /internal/owner/application-csrf` ve
+`POST /internal/owner/application` JSON API'si de var, ama ikisi de
+owner-session korumalıdır. **Bu bir iş başvuru gönderme API'si değildir.**
+
+Varsayılan olarak CRM yazımı **KAPALI**. Sahip ayrı least-privilege PostgreSQL
+rolü oluşturup yalnızca Render Environment içinde
+`CAREERHUNTER_CRM_DATABASE_URL` girince çalışabilir. Bu rol yalnızca
+`jobs` tablosuna SELECT, `opportunities` ve `followups` tablolarına
+ilgili SELECT/INSERT/UPDATE yetkilerine sahip olmalı; schema/DDL/admin erişimi
+olmamalı. Arayüzün `DASHBOARD_DATABASE_URL` rolü read-only kalır.
+Production'da SQLite yazma seçeneği reddedilir.
+
+Eksik ya da yanlış ayarda 503 ile fail-closed davranır. Gerçek veri üzerinde
+yetki testleri ve canlı form smoke, deploy sonrasında ayrıca yapılmalıdır.
+Profil/başvuru notlarını GitHub Action çıktısına yazma.
+
+Bu özelliklerin GitHub CI kanıtı, Render'a canlı deploy edildiği veya
+üretim veri tabanı izinlerinin doğru ayarlandığı anlamına gelmez.
+
+
+## 8. Canlı v2 kabul testi (yalnızca dağıtımdan sonra)
+
+GitHub Actions `CareerHunter v2 Production Acceptance (read-only)`
+workflow'u `workflow_dispatch` ile manuel tetiklenir. GitHub runner'a
+Telegram tokenı, Gmail gizlisi ya da PostgreSQL şifresi **verilmez**.
+Kontroller:
+
+1. Canlı `/readyz` 200 + `ready` dönmeli.
+2. Anonymous istekler `/internal/owner/application-csrf`,
+   `/applications/new`, `/internal/followups/due` ve
+   `/internal/gmail/review-summary` uçlarından 401 almalı.
+3. Eski sürüm 404 dönerse bu özellikle FAIL anlamına gelir;
+   “CI yeşil = deploy tamam” diye yanlış sonuç çıkarılmamalı.
+
+Bu test, sahibiyle giriş yapıp gerçek CRM verisi yazmayı, backup/rollback
+kanıtını, gerçek Gmail OAuth yetkisini, özel Telegram mesajının görülmesini
+ve ilk zamanlanmış followup/Gmail koşusunu **kanıtlamaz**. Bunlar ayrı
+üretim kabul kapılarıdır.
