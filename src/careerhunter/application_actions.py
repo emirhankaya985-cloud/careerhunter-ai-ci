@@ -74,7 +74,8 @@ def _writer_url() -> str:
     elif db_url.startswith("postgresql://"):
         db_url = "postgresql+psycopg://" + db_url[len("postgresql://"):]
     if db_url.startswith("sqlite:///"):
-        if os.environ.get("CAREERHUNTER_CRM_SQLITE_TEST") != "true":
+        if (os.environ.get("CAREERHUNTER_CRM_SQLITE_TEST") != "true"
+                or os.environ.get("RENDER")):
             raise HTTPException(503, "SQLite is permitted only in isolated tests")
     elif db_url.startswith("postgresql+psycopg://"):
         parsed = make_url(db_url)
