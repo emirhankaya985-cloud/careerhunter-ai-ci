@@ -23,6 +23,7 @@ from sqlalchemy import Integer, cast, create_engine, func, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import ArgumentError
 
 from .database import DatabaseRepository, contacts, jobs, runs
 from .models import Job
@@ -54,7 +55,7 @@ def _settings() -> tuple[str, str, str, bool]:
                           and (parsed_neon.host or "").lower().endswith(".neon.tech")
                           and parsed_neon.database == "careerhunter_live"
                           and bool(parsed_neon.username))
-        except (ValueError, TypeError):
+        except (ArgumentError, ValueError, TypeError):
             valid_neon = False
         if not valid_neon:
             raise RuntimeError("Neon cutover requires a verified dedicated target")
