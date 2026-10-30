@@ -28,6 +28,7 @@ from .database import DatabaseRepository, contacts, jobs, runs
 from .models import Job
 from .private_site_view import render_dashboard, render_login
 from .scheduled_scan import router as scan_router
+from .application_actions import router as application_router
 
 logger = logging.getLogger(__name__)
 SESSION_AGE = 12 * 60 * 60
@@ -232,7 +233,6 @@ app = FastAPI(title="CareerHunter Private Dashboard", docs_url=None,
 
 
 app.include_router(scan_router)
-from .application_actions import router as application_router
 app.include_router(application_router)
 
 
