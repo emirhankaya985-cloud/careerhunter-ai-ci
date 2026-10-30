@@ -194,18 +194,23 @@ def _panel_data(view: str, query: str, page: int, order: str = "fit") -> dict:
     rows, next_page = _job_rows(page if view == "jobs" else 1,
                                 query if view == "jobs" else "",
                                 limit=40 if view == "jobs" else 8,
-                                order=order if view == "jobs" else "recent") if view != "people" else ([], False)
+                                order=order if view == "jobs" else "recent") if view in {"jobs", "overview"} else ([], False)
     return {
         "view": view,
         "heading": {"overview": "Kariyer kontrol merkezi", "jobs": "İş fırsatları",
-                    "people": "Kişiler ve mesaj taslakları"}[view],
+                    "people": "Kişiler ve mesaj taslakları",
+                    "applications": "Başvurular ve takipler"}[view],
         "subtitle": {"overview": "Tüm ilanları, yeni fırsatları ve kişi kayıtlarını tek yerden izle.",
                      "jobs": "Canlı veritabanından listelenen iş ilanları. Başvuru otomatik yapılmaz.",
-                     "people": "Kişileri, kaynaklarını ve gönderilmeyi bekleyen taslaklarını incele."}[view],
+                     "people": "Kişileri, kaynaklarını ve gönderilmeyi bekleyen taslaklarını incele.",
+                     "applications": "Yalnızca kanıtlı manuel başvurular ve takip kayıtları."}[view],
         "metrics": {"total": summary["total"], "new": summary["new_24h"],
                     "people": len(people),
                     "drafts": sum(bool(p.message_variant_a or p.message_variant_a_tr) for p in people)},
         "countries": countries, "people": people if view == "people" else [],
+        "applications": repo.list_opportunities(limit=300) if view == "applications" else [],
+        "followups": repo.list_followups(pending_only=True, limit=300)
+                     if view == "applications" else [],
         "latest": repo.latest_run() if view == "overview" else None,
         "job_rows": rows, "has_next": next_page, "page": page, "query": query,
         "sort": order,
@@ -362,7 +367,7 @@ def home(request: Request):
     if not _authenticated(request):
         return RedirectResponse("/login", status_code=303)
     view = request.query_params.get("view", "overview")
-    if view not in {"overview", "jobs", "people"}:
+    if view not in {"overview", "jobs", "people", "applications"}:
         view = "overview"
     q = request.query_params.get("q", "")[:80].strip()
     try:
