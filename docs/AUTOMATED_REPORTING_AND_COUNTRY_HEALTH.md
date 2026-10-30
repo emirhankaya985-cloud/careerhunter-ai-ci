@@ -19,3 +19,11 @@ CI tests verify weekly aggregation, missing-log truthfulness, recovery deduplica
 ## Remaining blockers
 
 Render Free Postgres expiry 23 Nov 2026: independent restorable backup then safe Neon cutover and a new daily collector write/read check. Existing four-country deep verification and Weekly Career Strategy workflows remain manual until migrated from old database-secret execution. CV personalization remains an owner-triggered path. Production-grade fallback if the whole GitHub scheduling service is unavailable is not provided by this code.
+
+## Scheduled deterministic personal re-ranking
+
+On Tuesday and Friday at 15:50 UTC / 18:50 TRT, the existing GitHub-signed Personalize workflow automatically starts **rules-only** historical match re-ranking on Render. It reuses the existing private deployment profile; if the profile is unavailable, it fails closed. It never submits job applications, sends outreach, asks NVIDIA for paid tokens or calls external language-model APIs.
+
+All scheduled and manual re-ranking runs share the daily collector's GitHub concurrency group. A failed scheduled ranking posts a separate Telegram alert with its own scoped credentials. The manual AI option remains opt-in only.
+
+The first scheduled run, correct profile, row-level score changes and restored freshness must be checked before a live production PASS. Existing Render deployment lag can prevent new code paths from appearing, so inspect actual deployed commits.
