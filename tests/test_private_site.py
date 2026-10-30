@@ -275,3 +275,33 @@ def test_postgres_dashboard_connections_are_transaction_read_only(monkeypatch):
         assert calls[0][1]["connect_args"]["options"] == "-c default_transaction_read_only=on"
     finally:
         site._get_engine.cache_clear()
+
+
+def test_owner_only_application_and_evidence_views(private_client):
+    from datetime import timedelta
+    from careerhunter.models import Opportunity, FollowUp, utc_now
+    client, repo = private_client
+    repo.upsert_opportunity(Opportunity(
+        opportunity_id="greenhouse:0",
+        title="Junior Python Developer",
+        company="Example",
+        status="applied",
+        applied_at=utc_now(),
+    ))
+    repo.upsert_followup(FollowUp(
+        followup_id="manual-followup:greenhouse:0",
+        opportunity_id="greenhouse:0",
+        due_at=utc_now() + timedelta(days=7),
+        note="Check reply before reaching out",
+    ))
+    assert client.get("/?view=applications", follow_redirects=False).status_code == 303
+    client.post("/login", data={"password": "local-testing-secret-password-123"})
+    response = client.get("/?view=applications")
+    assert response.status_code == 200
+    assert "Junior Python Developer" in response.text
+    assert "Check reply before reaching out" in response.text
+    assert "Başvurular ve takipler" in response.text
+    assert "salt okunurdur" in response.text
+    page = client.get("/?view=jobs")
+    assert "Henüz doğrulanmadı" in page.text
+    assert "Başvurular ve Takipler" in page.text
