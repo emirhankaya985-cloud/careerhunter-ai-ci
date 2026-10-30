@@ -135,3 +135,28 @@ planın gerçekten çalışması için main'e merge ve Render deploy sonrasında
 en az bir schedule+Telegram canlı kanıtı gerekir. Yerel CLI ile girilen
 başvuru kayıtları otomatik olarak Render veritabanına aktarılmaz; canlı
 hatırlatmalar yalnızca o üretim veritabanında bulunan takipleri görür.
+
+## 6. Gmail API ile canlı salt-okunur pilot (yalnızca OAuth sonrası)
+
+`src/careerhunter/gmail_reader.py`, mesaj listesini Gmail API üzerinden
+okur ve yalnızca inceleme önerilerinin sayısını döndürür. Kişisel e-postalar,
+sender, subject, Gmail message id, bot token veya CV çıktıda bulunmaz.
+Kullanıcı en az yetkili **gmail.readonly** OAuth izniyle Google hesabını
+bağlamadan çalıştırılmaz. SMTP, Gmail send/modify/delete endpoint'i yoktur.
+
+Güvenli Render Environment gizlileri:
+- `GMAIL_READONLY_CLIENT_ID`
+- `GMAIL_READONLY_CLIENT_SECRET`
+- `GMAIL_READONLY_REFRESH_TOKEN`
+
+Önce `CAREERHUNTER_GMAIL_READONLY_ENABLED=true` Render ortamında açılır.
+Ardından GitHub Actions repository variable
+`CAREERHUNTER_GMAIL_REVIEW_ENABLED=true` etkinleştirilir. Böylece
+`gmail-review.yml` her gün 08:50 UTC (11:50 Türkiye saati) çalışır.
+İşlem yalnızca 20 son-24-saat INBOX iletisini okuyup Telegram'a özet sayılar
+gönderir. Eksik OAuth kimliği varsa FAIL, güvenli fail-closed olur.
+Önce gerçek OAuth yetkileri ve Gizlilik/KVKK gereksinimlerini doğrula.
+
+Bu özellik için gerçek hesap yetkilendirmesi ve canlı kanıt **henüz yok**.
+Ayrıca taslaklar otomatik iş başvurusuna, CRM durumuna veya e-posta yanıtına
+dönüşmez. Ret/mülakat tespiti yalnızca ön inceleme sinyalidir.
