@@ -280,7 +280,7 @@ class DatabaseRepository:
         """Persist verification evidence only; never imply submission or closure."""
         payload, digest = self._job_payload(job)
         values = {"payload": payload, "content_hash": digest}
-        if job.verification_status == "ATS_LISTED" and job.verification_observed_at:
+        if job.verification_status in {"ATS_LISTED", "EMPLOYER_CONFIRMED"} and job.verification_observed_at:
             values["last_verified_at"] = job.verification_observed_at.isoformat()
         with self.engine.begin() as connection:
             result = connection.execute(update(jobs).where(
