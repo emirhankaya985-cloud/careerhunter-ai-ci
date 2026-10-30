@@ -1,0 +1,66 @@
+name: CareerHunter v2 Production Acceptance (read-only)
+
+# Manual acceptance only; never a false-green claim before deployment.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live_acceptance:
+    if: github.repository == 'emirhankaya985-cloud/careerhunter-ai-ci' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Live v2 readiness, protected routes and no public data disclosure
+        shell: bash
+        env:
+          DASHBOARD_ORIGIN: https://careerhunter-private-dashboard.onrender.com
+        run: |
+          python - <<'PY'
+          import os
+          import time
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+
+          base = os.environ["DASHBOARD_ORIGIN"]
+
+          def get(path):
+              request = Request(base + path, headers={
+                  "User-Agent": "CareerHunter-v2-Acceptance/1.0"})
+              try:
+                  with urlopen(request, timeout=40) as response:
+                      return response.status, response.read(4096).decode("utf-8", "replace")
+              except HTTPError as exc:
+                  return exc.code, ""
+
+          ready = False
+          for i in range(6):
+              try:
+                  code, body = get("/readyz")
+                  if code == 200 and body.strip() == "ready":
+                      ready = True
+                      break
+              except (URLError, TimeoutError):
+                  pass
+              if i != 5:
+                  time.sleep(15)
+          if not ready:
+              raise SystemExit("FAIL: v2 live PostgreSQL readiness absent")
+          print("PASS: live app and PostgreSQL ready")
+
+          # These routes return auth failure *only* when the v2 API code
+          # has actually been deployed. Old versions return 404.
+          for path in (
+              "/internal/owner/application-csrf",
+              "/applications/new?source=ashby&job_id=example",
+              "/internal/followups/due",
+              "/internal/gmail/review-summary",
+          ):
+              code, _ = get(path)
+              if code != 401:
+                  raise SystemExit("FAIL: protected v2 route not deployed or exposed")
+          print("PASS: v2 owner and OIDC endpoints exist and reject anonymous reads")
+          print("NO CLAIM: authenticated owner write, OAuth, backup or Telegram delivery")
+          PY
