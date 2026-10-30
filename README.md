@@ -56,7 +56,7 @@ may sleep when idle and restart on demand.
 This branch adds a **local-only owner workflow** on top of the existing ATS
 collector, matching engine, Telegram digest, and private dashboard:
 
-- Successful configured ATS fetch marks the job `ATS_LISTED` (one source, no
+- Optional owner-triggered exact-link check on a configured employer-owned careers\n  page can elevate a specific posting to EMPLOYER_CONFIRMED.\n- Successful configured ATS fetch marks the job `ATS_LISTED` (one source, no
   independent employer-site verification). Optional rechecks distinguish
   source outages from absent listings.
 - `python -m careerhunter.v2_workflow --db <EXISTING_LOCAL_SQLITE> verify ...`
