@@ -118,3 +118,27 @@ def test_verify_error_is_not_reported_as_success(tmp_path, monkeypatch, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "SOURCE_ERROR"
     assert repo.get_job("ashby", "job42").status != "closed"
+
+
+
+def test_employer_corrob_requires_second_page_success(tmp_path, monkeypatch, capsys):
+    from careerhunter.employer_corroboration import EmployerEvidence
+    db, repo = seeded_repo(tmp_path)
+    class Source:
+        def __init__(self, **kwargs):
+            pass
+        def fetch(self, company, slug):
+            return [sample_job()]
+    monkeypatch.setitem(SOURCE_CLASSES, "ashby", Source)
+    monkeypatch.setattr(
+        "careerhunter.v2_workflow.check_employer_page",
+        lambda page, posting: EmployerEvidence(
+            True, "exact_posting_link_on_configured_employer_page", page
+        ),
+    )
+    result = main(["--db", str(db), "verify", "--source", "ashby",
+                   "--job-id", "job42", "--employer-check"])
+    assert result == 0
+    rendered = json.loads(capsys.readouterr().out)
+    assert rendered["status"] == "EMPLOYER_CONFIRMED"
+    assert repo.get_job("ashby", "job42").verification_status == "EMPLOYER_CONFIRMED"
