@@ -97,3 +97,31 @@ def test_rejects_same_database_and_non_postgres_production(tmp_path):
         transfer(src, src, allow_sqlite_tests=True)
     with pytest.raises(ValueError, match="PostgreSQL"):
         transfer(src, dst)
+
+
+def test_first_cloud_copy_is_a_verified_backup_not_production_cutover(tmp_path):
+    src, dst = urls(tmp_path)
+    seed(src)
+    report = transfer(src, dst, apply=True, create_first_cloud_backup=True,
+                      allow_sqlite_tests=True)
+    assert report["cloud_backup_created"] is True
+    assert report["production_cutover_performed"] is False
+    assert report["source_counts"] == report["target_counts"]
+    with create_engine(src).connect() as source:
+        assert source.execute(select(func.count()).select_from(jobs)).scalar_one() == 1
+
+
+def test_cloud_backup_always_refuses_overwriting_target(tmp_path):
+    src, dst = urls(tmp_path)
+    seed(src)
+    seed(dst)
+    with pytest.raises(RuntimeError, match="Target has tables"):
+        transfer(src, dst, apply=True, create_first_cloud_backup=True,
+                 allow_sqlite_tests=True)
+
+
+def test_first_cloud_backup_requires_a_real_neon_postgres_target(tmp_path):
+    src, dst = urls(tmp_path)
+    seed(src)
+    with pytest.raises(ValueError, match="Neon PostgreSQL"):
+        transfer(src, dst, apply=True, create_first_cloud_backup=True)
