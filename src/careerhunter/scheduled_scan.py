@@ -202,7 +202,43 @@ def scan_status(request: Request) -> dict[str, object]:
             raise
         _require_github_oidc(request, workflow=RESCORE_WORKFLOW)
     with _lock:
-        return dict(_state)
+        state = dict(_state)
+    # A free-tier rolling deploy can reset this process-local status to idle
+    # after the collector committed a successful PostgreSQL run. Recover only
+    # a run begun AFTER this authenticated caller's specific scan request;
+    # never infer success from a previous day's completed scan.
+    since = request.query_params.get("since", "")
+    if state.get("status") != "idle" or not since:
+        return state
+    try:
+        origin = datetime.fromisoformat(since)
+        if (origin.tzinfo is None or
+                not 0 <= (datetime.now(timezone.utc) - origin).total_seconds() <= 35 * 60):
+            raise ValueError("Invalid scan start time")
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid scan start time") from None
+    from sqlalchemy import select
+    from .database import runs as runs_table
+    from .private_site import _get_engine
+    with _get_engine().connect() as connection:
+        latest = connection.execute(
+            select(runs_table.c.status, runs_table.c.jobs_processed,
+                   runs_table.c.jobs_new, runs_table.c.started_at,
+                   runs_table.c.finished_at)
+            .where(runs_table.c.slot == "jobs")
+            .where(runs_table.c.started_at >= since)
+            .order_by(runs_table.c.id.desc()).limit(1)
+        ).mappings().first()
+    if latest:
+        return {
+            "status": latest["status"],
+            "jobs_processed": int(latest["jobs_processed"] or 0),
+            "jobs_new": int(latest["jobs_new"] or 0),
+            "started_at": latest["started_at"],
+            "finished_at": latest["finished_at"],
+            "durable_recovery": True,
+        }
+    return state
 
 
 def _rescore() -> None:
