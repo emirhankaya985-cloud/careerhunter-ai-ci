@@ -29,3 +29,5 @@ jobs:
 # Safe diagnostic recovery attempt after PR24 deployment.
 
 # Isolated PG17 acceptance after safe target identity diagnosis.
+
+# Repeat after verified Debian-suffixed PostgreSQL 17 parser correction.
