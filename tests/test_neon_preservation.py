@@ -1,6 +1,6 @@
 """Source-preservation proof distinguishes legitimate newer Neon scans from data loss."""
 from sqlalchemy import create_engine, insert, update
-from careerhunter.database import jobs, metadata, runs
+from careerhunter.database import company_signals, jobs, metadata, runs
 from careerhunter.neon_reconcile import _source_preserved
 
 
@@ -45,7 +45,7 @@ def test_original_jobs_and_history_survive_newer_neon_scan():
     old, new = _pair()
     try:
         with old.connect() as a, new.connect() as b:
-            assert _source_preserved(a, b, {"jobs": 1, "runs": 1}, {"jobs": 2, "runs": 2})
+            assert _source_preserved(a, b, {"jobs": 1, "runs": 1, "company_signals": 0}, {"jobs": 2, "runs": 2, "company_signals": 0})
     finally:
         old.dispose()
         new.dispose()
@@ -58,7 +58,7 @@ def test_modified_first_observation_is_not_valid_preservation():
             b.execute(update(jobs).where(jobs.c.job_id == "1").values(
                 first_seen_at="2026-10-31T10:00:00+00:00"))
         with old.connect() as a, new.connect() as b:
-            assert not _source_preserved(a, b, {"jobs": 1, "runs": 1}, {"jobs": 2, "runs": 2})
+            assert not _source_preserved(a, b, {"jobs": 1, "runs": 1, "company_signals": 0}, {"jobs": 2, "runs": 2, "company_signals": 0})
     finally:
         old.dispose()
         new.dispose()
@@ -70,7 +70,51 @@ def test_historical_run_tampering_is_detected():
         with new.begin() as b:
             b.execute(update(runs).where(runs.c.id == 1).values(status="failed"))
         with old.connect() as a, new.connect() as b:
-            assert not _source_preserved(a, b, {"jobs": 1, "runs": 1}, {"jobs": 2, "runs": 2})
+            assert not _source_preserved(a, b, {"jobs": 1, "runs": 1, "company_signals": 0}, {"jobs": 2, "runs": 2, "company_signals": 0})
+    finally:
+        old.dispose()
+        new.dispose()
+
+
+def test_company_signal_new_observation_preserves_identity():
+    old, new = _pair()
+    original = {
+        "signal_id": "s-1", "company_id": "c-1", "company": "Example",
+        "signal_type": "team", "claim": "old public evidence", "payload": "{}",
+        "observed_at": "2026-10-30T10:00:00+00:00",
+    }
+    fresh = {**original, "claim": "newer public evidence",
+             "observed_at": "2026-10-31T10:00:00+00:00"}
+    try:
+        with old.begin() as a:
+            a.execute(insert(company_signals), [original])
+        with new.begin() as b:
+            b.execute(insert(company_signals), [fresh])
+        with old.connect() as a, new.connect() as b:
+            assert _source_preserved(
+                a, b, {"jobs": 1, "runs": 1, "company_signals": 1},
+                {"jobs": 2, "runs": 2, "company_signals": 1})
+    finally:
+        old.dispose()
+        new.dispose()
+
+
+def test_company_signal_identity_change_is_not_accepted():
+    old, new = _pair()
+    signal = {
+        "signal_id": "s-1", "company_id": "c-1", "company": "Example",
+        "signal_type": "team", "claim": "evidence", "payload": "{}",
+        "observed_at": "2026-10-30T10:00:00+00:00",
+    }
+    try:
+        with old.begin() as a:
+            a.execute(insert(company_signals), [signal])
+        with new.begin() as b:
+            b.execute(insert(company_signals), [{**signal, "company_id": "changed"}])
+        with old.connect() as a, new.connect() as b:
+            assert not _source_preserved(
+                a, b, {"jobs": 1, "runs": 1, "company_signals": 1},
+                {"jobs": 2, "runs": 2, "company_signals": 1})
     finally:
         old.dispose()
         new.dispose()
