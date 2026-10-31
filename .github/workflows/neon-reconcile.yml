@@ -36,8 +36,12 @@ jobs:
           wait_ready()
           state = call("/internal/neon-cutover/state")
           print("Live database identity (safe fields):", json.dumps(state, sort_keys=True))
-          if state.get("selected_target") != "render" or state.get("effective_backend") != "non_neon":
-              raise SystemExit("STOP: Render is not the active source; no cutover executed")
+          if state.get("selected_target") not in {"render", "neon"}:
+              raise SystemExit("STOP: active database selection invalid")
+          if (state.get("selected_target") == "neon"
+                  and state.get("effective_backend") != "neon"):
+              raise SystemExit("STOP: selected and effective database disagree")
+          print("Reconciliation reads the retained original Render URL, not the active selector")
           result = None
           for attempt in range(12):
               try:
