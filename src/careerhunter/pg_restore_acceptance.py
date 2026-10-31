@@ -20,6 +20,7 @@ from sqlalchemy.engine import make_url
 
 from .database import metadata
 from .pg_transfer import _fingerprint, _source_counts
+from .pg17_portable import binary_path, command_env, install
 from .scheduled_scan import REPO, _require_github_oidc
 
 router = APIRouter()
@@ -46,12 +47,16 @@ def _urls() -> tuple[str, str]:
 
 def _env(url: str) -> dict[str, str]:
     parsed = make_url(url)
-    return {
+    host = str(parsed.host)
+    prefix, dot, suffix = host.partition(".")
+    if prefix.endswith("-pooler") and dot:
+        host = prefix.removesuffix("-pooler") + dot + suffix
+    return command_env({
         **os.environ,
-        "PGHOST": str(parsed.host), "PGPORT": str(parsed.port or 5432),
+        "PGHOST": host, "PGPORT": str(parsed.port or 5432),
         "PGUSER": str(parsed.username), "PGPASSWORD": str(parsed.password),
         "PGDATABASE": str(parsed.database), "PGSSLMODE": "require",
-    }
+    })
 
 
 def _client_major(binary: str) -> int | None:
@@ -59,13 +64,15 @@ def _client_major(binary: str) -> int | None:
     if binary not in {"pg_dump", "pg_restore"}:
         raise ValueError("Unexpected executable")
     preferred = f"/usr/lib/postgresql/17/bin/{binary}"
-    path = preferred if Path(preferred).is_file() else shutil.which(binary)
+    path = binary_path(binary) or (
+        preferred if Path(preferred).is_file() else shutil.which(binary)
+    )
     if not path:
         return None
     try:
         result = subprocess.run(
             [path, "--version"], check=True, timeout=6,
-            capture_output=True, text=True,
+            capture_output=True, text=True, env=command_env(os.environ),
         )
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
         return None
@@ -82,7 +89,9 @@ def _installed() -> bool:
 
 def _pg_bin(binary: str) -> str:
     preferred = f"/usr/lib/postgresql/17/bin/{binary}"
-    return preferred if Path(preferred).is_file() else str(shutil.which(binary))
+    return binary_path(binary) or (
+        preferred if Path(preferred).is_file() else str(shutil.which(binary))
+    )
 
 
 def _check() -> None:
@@ -159,8 +168,16 @@ def tools_available(request: Request) -> dict:
 @router.post("/internal/pg-restore/start")
 def start(request: Request) -> dict:
     _auth(request)
-    if os.getenv("CAREERHUNTER_PG_RESTORE_ENABLED") != "true" or not _installed():
-        raise HTTPException(503, "Restore test prerequisites absent")
+    if os.getenv("CAREERHUNTER_PG_RESTORE_ENABLED") != "true":
+        raise HTTPException(503, "Restore acceptance disabled")
+    if not _installed():
+        try:
+            install()
+        except Exception as exc:
+            logger.warning("PG17 toolchain preparation failed (%s)", type(exc).__name__)
+            raise HTTPException(503, "Verified PG17 tooling unavailable") from None
+    if not _installed():
+        raise HTTPException(503, "PG17 version validation failed")
     try:
         _urls()
     except (TypeError, ValueError):
