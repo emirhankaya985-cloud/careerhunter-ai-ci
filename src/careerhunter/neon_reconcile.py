@@ -82,8 +82,20 @@ def neon_preflight(request: Request) -> dict:
         request, workflow=WORKFLOW,
         events=frozenset({"push", "workflow_dispatch"}),
     )
+    stage = "validate"
     try:
-        return _compare(*_connections())
+        source, target = _connections()
+        stage = "read_only_compare"
+        return _compare(source, target)
     except Exception as exc:
-        logger.warning("Neon reconciliation blocked: %s", type(exc).__name__)
+        # Fixed diagnostic codes only; SQL driver exceptions may contain
+        # connection details and must never be included in application logs.
+        safe_reasons = {
+            "Render must remain primary during pre-cutover reconciliation": "source_not_render",
+            "Reconciliation cannot access a verified Neon target": "target_validation",
+            "Source must be hosted PostgreSQL": "source_validation",
+        }
+        reason = safe_reasons.get(str(exc), "unclassified") if stage == "validate" else "comparison"
+        logger.warning("Neon reconciliation blocked at %s (%s, %s)",
+                       stage, reason, type(exc).__name__)
         raise HTTPException(503, "Neon reconciliation is unavailable") from None
