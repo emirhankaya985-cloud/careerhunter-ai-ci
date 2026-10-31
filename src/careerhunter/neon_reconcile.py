@@ -99,3 +99,28 @@ def neon_preflight(request: Request) -> dict:
         logger.warning("Neon reconciliation blocked at %s (%s, %s)",
                        stage, reason, type(exc).__name__)
         raise HTTPException(503, "Neon reconciliation is unavailable") from None
+
+
+@router.get("/internal/neon-cutover/state")
+def neon_effective_state(request: Request) -> dict:
+    """Only sanitized effective database identity, never host or credentials."""
+    _require_github_oidc(
+        request, workflow=WORKFLOW,
+        events=frozenset({"push", "workflow_dispatch"}),
+    )
+    from .private_site import _settings
+    try:
+        effective = make_url(_settings()[2])
+        chosen = os.getenv("CAREERHUNTER_DB_TARGET", "render").strip().lower()
+        return {
+            "selected_target": chosen if chosen in {"render", "neon"} else "invalid",
+            "effective_backend": ("neon" if (effective.host or "").lower().endswith(".neon.tech")
+                                  else "non_neon"),
+            "effective_database": (
+                effective.database if effective.database in {"careerhunter", "careerhunter_live",
+                                                              "careerhunter_ai_db"} else "other"),
+            "does_not_write": True,
+        }
+    except Exception as exc:
+        logger.warning("Safe database state probe failed (%s)", type(exc).__name__)
+        raise HTTPException(503, "Database identity unavailable") from None
