@@ -69,3 +69,24 @@ def test_postgres_commands_never_pass_credentials_in_argv():
     assert '"pg_dump"' in code and '"pg_restore"' in code
     assert "stdout=subprocess.DEVNULL" in code
     assert "stderr=subprocess.DEVNULL" in code
+
+
+def test_neon_postgres17_requires_matching_real_client_binaries(monkeypatch):
+    from types import SimpleNamespace
+
+    class NoPreferredBinary:
+        def __init__(self, path):
+            self.path = path
+
+        def is_file(self):
+            return False
+
+    monkeypatch.setattr(recovery, "Path", NoPreferredBinary)
+    monkeypatch.setattr(recovery.shutil, "which", lambda name: "/usr/bin/" + name)
+    monkeypatch.setattr(recovery.subprocess, "run", lambda *args, **kwargs:
+                        SimpleNamespace(stdout="pg_dump (PostgreSQL) 17.11"))
+    assert recovery._installed() is True
+
+    monkeypatch.setattr(recovery.subprocess, "run", lambda *args, **kwargs:
+                        SimpleNamespace(stdout="pg_restore (PostgreSQL) 15.4"))
+    assert recovery._installed() is False
