@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -54,8 +55,32 @@ def _env(url: str) -> dict[str, str]:
     }
 
 
+def _client_major(binary: str) -> int | None:
+    """Use exact PostgreSQL v17 tools; Debian's default v15 cannot dump Neon 17."""
+    if binary not in {"pg_dump", "pg_restore"}:
+        raise ValueError("Unexpected executable")
+    preferred = f"/usr/lib/postgresql/17/bin/{binary}"
+    path = preferred if Path(preferred).is_file() else shutil.which(binary)
+    if not path:
+        return None
+    try:
+        result = subprocess.run(
+            [path, "--version"], check=True, timeout=6,
+            capture_output=True, text=True,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        return None
+    match = re.search(r"PostgreSQL\\)?\\s+(\\d+)(?:\\.\\d+)?", result.stdout)
+    return int(match.group(1)) if match else None
+
+
 def _installed() -> bool:
-    return bool(shutil.which("pg_dump") and shutil.which("pg_restore"))
+    return _client_major("pg_dump") == 17 and _client_major("pg_restore") == 17
+
+
+def _pg_bin(binary: str) -> str:
+    preferred = f"/usr/lib/postgresql/17/bin/{binary}"
+    return preferred if Path(preferred).is_file() else str(shutil.which(binary))
 
 
 def _check() -> None:
@@ -67,20 +92,26 @@ def _check() -> None:
         src = create_engine(source, pool_pre_ping=True,
                             connect_args={"options": "-c default_transaction_read_only=on"})
         dst = create_engine(destination, pool_pre_ping=True)
+        with src.connect() as check_source:
+            version = int(check_source.exec_driver_sql(
+                "SELECT current_setting('server_version_num')"
+            ).scalar_one())
+        if version // 10000 != 17:
+            raise RuntimeError("unexpected_postgres_source_major")
         # Fail closed if there is a single user table in the scratch database.
         with dst.connect() as connection:
             if inspect(connection).get_table_names(schema="public"):
                 raise RuntimeError("scratch_database_not_empty")
         with tempfile.TemporaryDirectory(prefix="careerhunter-restore-") as folder:
             archive = str(Path(folder) / "neon.dump")
-            subprocess.run(["pg_dump", "--format=custom", "--no-owner", "--no-acl",
+            subprocess.run([_pg_bin("pg_dump"), "--format=custom", "--no-owner", "--no-acl",
                             "--no-password", "--file", archive],
                            env=_env(source), check=True, timeout=300,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             if Path(archive).stat().st_size < 1024:
                 raise RuntimeError("archive_too_small")
             # Populate only a verified empty scratch database; never issue drops.
-            subprocess.run(["pg_restore", "--exit-on-error",
+            subprocess.run([_pg_bin("pg_restore"), "--exit-on-error",
                             "--no-owner", "--no-acl", "--no-password",
                             "--dbname", SCRATCH, archive],
                            env=_env(destination), check=True, timeout=300,
