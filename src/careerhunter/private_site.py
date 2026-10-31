@@ -33,6 +33,7 @@ from .application_actions import router as application_router
 from .cloud_backup import router as cloud_backup_router
 from .neon_reconcile import router as neon_reconcile_router
 from .gmail_acceptance import router as gmail_acceptance_router
+from .pg_restore_acceptance import router as pg_restore_acceptance_router
 
 logger = logging.getLogger(__name__)
 SESSION_AGE = 12 * 60 * 60
@@ -260,6 +261,7 @@ app.include_router(application_router)
 app.include_router(cloud_backup_router)
 app.include_router(neon_reconcile_router)
 app.include_router(gmail_acceptance_router)
+app.include_router(pg_restore_acceptance_router)
 
 
 @app.middleware("http")
