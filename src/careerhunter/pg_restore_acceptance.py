@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 import shutil
 import subprocess
 import tempfile
@@ -70,8 +69,11 @@ def _client_major(binary: str) -> int | None:
         )
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
         return None
-    match = re.search(r"PostgreSQL\\)?\\s+(\\d+)(?:\\.\\d+)?", result.stdout)
-    return int(match.group(1)) if match else None
+    parts = result.stdout.strip().split()
+    if len(parts) < 3 or "PostgreSQL" not in parts[-2]:
+        return None
+    major = parts[-1].split(".", 1)[0]
+    return int(major) if major.isdecimal() else None
 
 
 def _installed() -> bool:
