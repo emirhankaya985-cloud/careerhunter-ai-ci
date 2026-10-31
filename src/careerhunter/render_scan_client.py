@@ -92,6 +92,8 @@ def main() -> int:
             "ai" if is_ai else "rescore" if is_rescore else "jobs",
         ):
             raise RuntimeError("A different production task owns the worker")
+        if status == "idle" and (is_ai or is_rescore):
+            raise RuntimeError("Rescore lost process state; no jobs receipt can verify it")
         if status == "idle":
             # A Render redeploy can reset memory while the DB keeps a durable
             # completed run. Never mistake yesterday's run for this one.
