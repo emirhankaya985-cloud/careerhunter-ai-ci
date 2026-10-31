@@ -77,9 +77,12 @@ def _client_major(binary: str) -> int | None:
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
         return None
     parts = result.stdout.strip().split()
-    if len(parts) < 3 or "PostgreSQL" not in parts[-2]:
+    try:
+        version_index = parts.index("(PostgreSQL)") + 1
+        token = parts[version_index]
+    except (ValueError, IndexError):
         return None
-    major = parts[-1].split(".", 1)[0]
+    major = token.split(".", 1)[0]
     return int(major) if major.isdecimal() else None
 
 
