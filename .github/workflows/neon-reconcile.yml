@@ -74,7 +74,7 @@ jobs:
                       or int(result.get("new_neon_runs", -1)) != int(right["runs"]) - int(left["runs"])):
                   raise SystemExit("FAIL: post-cutover preservation metadata invalid")
               print("PASS: every original job ID and first-seen date preserved")
-              print("PASS: historical runs and eight other tables remain identical")
+              print("PASS: historical runs and seven static tables remain identical; company signal identities preserved")
               print("Newer Neon jobs:", result.get("new_neon_jobs"))
               print("Newer Neon runs:", result.get("new_neon_runs"))
           else:
