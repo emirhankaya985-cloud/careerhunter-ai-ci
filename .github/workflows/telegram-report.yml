@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   id-token: write
 
 concurrency:
@@ -16,7 +17,7 @@ concurrency:
 
 jobs:
   notify:
-    if: github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.run_attempt == 1
+    if: github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.repository.full_name == 'emirhankaya985-cloud/careerhunter-ai-ci'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -24,14 +25,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Verify parent workflow attempt history without duplicate messages
+        id: guard
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PARENT_RUN_ID: ${{ github.event.workflow_run.id }}
+          PARENT_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          PARENT_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: PYTHONPATH=src python -m careerhunter.telegram_attempt_guard
       - name: New career matches via Telegram
-        if: github.event.workflow_run.conclusion == 'success'
+        if: steps.guard.outputs.notify == 'true' && github.event.workflow_run.conclusion == 'success'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: PYTHONPATH=src python -m careerhunter.telegram_only_report
       - name: Scan failure alert
-        if: github.event.workflow_run.conclusion != 'success'
+        if: steps.guard.outputs.notify == 'true' && github.event.workflow_run.conclusion != 'success'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
