@@ -24,10 +24,10 @@ WORKFLOW = REPO + "/.github/workflows/neon-reconcile.yml@refs/heads/main"
 
 
 def _connections() -> tuple[str, str]:
-    if os.environ.get("CAREERHUNTER_DB_TARGET", "render").strip().lower() != "render":
-        raise RuntimeError("Render must remain primary during pre-cutover reconciliation")
-    from .private_site import _settings
-    source = _settings()[2]
+    # Do not use the *selected* database here: a previous operator may
+    # already have switched the app to Neon. Explicitly read the retained
+    # ORIGINAL Render DSN and compare it to the current Neon destination.
+    source = os.environ.get("DASHBOARD_DATABASE_URL", "").strip()
     target = os.environ.get("CAREERHUNTER_NEON_DATABASE_URL", "").strip()
     try:
         parsed = make_url(target)
@@ -38,6 +38,12 @@ def _connections() -> tuple[str, str]:
             and bool(parsed.username)
         ):
             raise ValueError("Invalid dedicated Neon target")
+        original = make_url(source)
+        if (original.get_backend_name() != "postgresql"
+                or original.database != "careerhunter_ai_db"
+                or not original.host
+                or original.host.lower().endswith(".neon.tech")):
+            raise ValueError("Original Render source identity cannot be proven")
         source, target = _check_urls(source, target, False)
     except (ArgumentError, ValueError, TypeError):
         raise RuntimeError("Reconciliation cannot access a verified Neon target") from None
@@ -91,7 +97,6 @@ def neon_preflight(request: Request) -> dict:
         # Fixed diagnostic codes only; SQL driver exceptions may contain
         # connection details and must never be included in application logs.
         safe_reasons = {
-            "Render must remain primary during pre-cutover reconciliation": "source_not_render",
             "Reconciliation cannot access a verified Neon target": "target_validation",
             "Source must be hosted PostgreSQL": "source_validation",
         }
