@@ -1,0 +1,66 @@
+name: CareerHunter Neon Exact Reconciliation (read-only)
+
+# One-time signed main push probe; manual reruns require a fresh GitHub OIDC token.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/neon-reconcile.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: careerhunter-production-collector
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    if: github.repository == 'emirhankaya985-cloud/careerhunter-ai-ci' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compare every Render and Neon row without writing or leaking data
+        shell: bash
+        run: |
+          PYTHONPATH=src python - <<'PY'
+          import json
+          import time
+          from careerhunter.render_scan_client import call, wait_ready
+          wait_ready()
+          result = None
+          for attempt in range(12):
+              try:
+                  result = call("/internal/neon-cutover/preflight")
+                  break
+              except RuntimeError as exc:
+                  if "HTTP 404" not in str(exc) or attempt == 11:
+                      raise
+                  time.sleep(15)
+          if not isinstance(result, dict):
+              raise SystemExit("FAIL: reconciliation route unavailable")
+          left = result.get("source_counts")
+          right = result.get("target_counts")
+          if (
+              result.get("status") != "match"
+              or result.get("all_row_hashes_equal") is not True
+              or result.get("production_cutover_performed") is not False
+              or not isinstance(left, dict)
+              or left != right
+              or len(left) != 10
+              or int(left.get("jobs", 0)) < 1
+          ):
+              print("FAIL: source and Neon data are not exactly equal")
+              print("Source table counts:", left)
+              print("Neon table counts:", right)
+              raise SystemExit(1)
+          print("PASS: exact content match of all ten tables")
+          print("Equal row counts:", json.dumps(left, sort_keys=True))
+          print("PASS: Render source and production connection unchanged")
+          PY
