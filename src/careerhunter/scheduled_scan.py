@@ -131,10 +131,64 @@ def start_scan(request: Request) -> dict[str, object]:
         _state.clear()
         _state.update({
             "status": "running",
+            "mode": "jobs",
             "started_at": datetime.now(timezone.utc).isoformat(),
         })
         threading.Thread(target=_collect, name="careerhunter-collector", daemon=True).start()
         return dict(_state)
+
+
+@router.get("/internal/scan/receipt")
+def scan_receipt(request: Request) -> dict[str, object]:
+    """Read-only durable proof after a web process restart erases _state.
+
+    This never accepts arbitrary SQL or an external database URL. A success
+    receipt must be from a NEW completed jobs run, not the previous day's.
+    """
+    _require_github_oidc(request)
+    from datetime import timedelta
+    from sqlalchemy import create_engine, select
+    from .database import runs
+    from .private_site import _settings
+
+    raw = request.query_params.get("since", "")
+    try:
+        since = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if since.tzinfo is None:
+            raise ValueError("timestamp must have timezone")
+        since = since.astimezone(timezone.utc)
+        age = datetime.now(timezone.utc) - since
+        if age < timedelta(seconds=-90) or age > timedelta(hours=3):
+            raise ValueError("timestamp outside scan acceptance window")
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid scan timestamp") from None
+
+    url = _settings()[2]
+    readonly = ({"connect_args": {"options": "-c default_transaction_read_only=on"}}
+                if url.startswith("postgresql+psycopg://") else {})
+    engine = create_engine(url, pool_pre_ping=True, **readonly)
+    try:
+        with engine.connect() as connection:
+            record = connection.execute(
+                select(runs.c.id, runs.c.started_at, runs.c.status,
+                       runs.c.jobs_processed, runs.c.jobs_new)
+                .where(runs.c.slot == "jobs", runs.c.started_at >= since.isoformat())
+                .order_by(runs.c.id.desc()).limit(1)
+            ).mappings().first()
+    except Exception as exc:
+        logger.warning("Durable scan receipt read failed (%s)", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Scan receipt unavailable") from None
+    finally:
+        engine.dispose()
+    if record is None:
+        return {"status": "absent"}
+    return {
+        "status": str(record["status"]),
+        "run_id": int(record["id"]),
+        "jobs_processed": int(record["jobs_processed"] or 0),
+        "jobs_new": int(record["jobs_new"] or 0),
+        "durable_receipt": True,
+    }
 
 
 @router.get("/internal/scan/status")

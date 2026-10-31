@@ -75,6 +75,10 @@ def main() -> int:
     if (is_rescore or is_ai) and started.get("mode") != ("ai" if is_ai else "rescore"):
         raise RuntimeError("Another production task is running; retry rescore later")
     print("Authenticated Render task accepted")
+    started_at = str(started.get("started_at", ""))
+    if not started_at:
+        raise RuntimeError("Collector did not return a verifiable start timestamp")
+    restart_attempts = 0
 
     deadline = time.monotonic() + 26 * 60
     last_status = None
@@ -84,6 +88,44 @@ def main() -> int:
         if status != last_status:
             print("Collector state:", status)
             last_status = status
+        if status == "running" and state.get("mode", "jobs") not in (
+            "ai" if is_ai else "rescore" if is_rescore else "jobs",
+        ):
+            raise RuntimeError("A different production task owns the worker")
+        if status == "idle" and (is_ai or is_rescore):
+            raise RuntimeError("Rescore lost process state; no jobs receipt can verify it")
+        if status == "idle":
+            # A Render redeploy can reset memory while the DB keeps a durable
+            # completed run. Never mistake yesterday's run for this one.
+            proof = call("/internal/scan/receipt?since=" + quote(started_at, safe=""))
+            if proof.get("status") == "success" and proof.get("durable_receipt") is True:
+                state, status = proof, "success"
+                print("PASS: recovered verified scan receipt after process restart")
+            elif proof.get("status") == "failed":
+                raise RuntimeError("Persisted production scan failed")
+            elif proof.get("status") == "absent" and restart_attempts == 0:
+                # Allow an in-flight old process to finish and commit its run
+                # before starting another attempt; no blind duplicate start.
+                time.sleep(45)
+                proof = call("/internal/scan/receipt?since=" + quote(started_at, safe=""))
+                if proof.get("status") == "success" and proof.get("durable_receipt") is True:
+                    state, status = proof, "success"
+                    print("PASS: recovered delayed durable scan receipt")
+                elif proof.get("status") != "absent":
+                    raise RuntimeError("Scan recovery receipt failed or is invalid")
+                else:
+                    retry = call(endpoint, method="POST")
+                    if retry.get("status") != "running" or retry.get("mode", "jobs") != "jobs":
+                        raise RuntimeError("Restarted worker was not accepted")
+                    started_at = str(retry.get("started_at", ""))
+                    if not started_at:
+                        raise RuntimeError("Restarted worker lacks scan start timestamp")
+                    restart_attempts += 1
+                    print("Recovered one interrupted production scan attempt")
+                    last_status = None
+                    continue
+            else:
+                raise RuntimeError("Collector lost state; no verified durable receipt")
         if status == "success":
             if (is_rescore or is_ai) and state.get("mode") != ("ai" if is_ai else "rescore"):
                 raise RuntimeError("Rescore task was replaced by another task")
@@ -102,7 +144,7 @@ def main() -> int:
                 out.write("- Target: protected Render PostgreSQL (no CI database credentials)\n")
                 out.write("- Outreach: disabled\n")
             return 0
-        if status in {"failed", "empty", "idle"}:
+        if status in {"failed", "empty"}:
             raise RuntimeError("Collector ended without confirmed new snapshot: " + str(status))
         time.sleep(15)
     raise RuntimeError("Collector exceeded 26-minute polling limit")
