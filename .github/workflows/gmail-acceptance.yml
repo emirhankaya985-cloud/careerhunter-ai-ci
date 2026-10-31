@@ -1,0 +1,52 @@
+name: CareerHunter Gmail Readonly Live Acceptance
+
+# One-time, source-owned verification of server OAuth, without sending mail.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/gmail-acceptance.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  gmail_acceptance:
+    if: github.repository == 'emirhankaya985-cloud/careerhunter-ai-ci' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify actual Render OAuth and read at most three Gmail messages
+        shell: bash
+        run: |
+          PYTHONPATH=src python - <<'PY'
+          import time
+          from careerhunter.render_scan_client import call, wait_ready
+          wait_ready()
+          result = None
+          for attempt in range(12):
+              try:
+                  result = call("/internal/gmail/acceptance")
+                  break
+              except RuntimeError as exc:
+                  if "HTTP 404" not in str(exc) or attempt == 11:
+                      raise
+                  time.sleep(15)
+          status = result.get("status") if isinstance(result, dict) else "unavailable"
+          print("Gmail server acceptance state:", status)
+          if status != "ready":
+              raise SystemExit("FAIL: Render Gmail OAuth or explicit read-only opt-in is incomplete")
+          if (result.get("read_only") is not True
+                  or result.get("messages_sent") != 0
+                  or result.get("messages_modified") != 0):
+              raise SystemExit("FAIL: unsafe Gmail acceptance result")
+          print("PASS: real Gmail readonly scan, bounded to 3 messages")
+          print("Messages scanned:", int(result.get("scanned", 0)))
+          print("No Gmail message sent, modified or exposed")
+          PY
