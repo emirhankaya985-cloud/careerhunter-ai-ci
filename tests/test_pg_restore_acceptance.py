@@ -58,7 +58,9 @@ def test_recovery_routes_fail_closed_without_signed_identity(tmp_path, monkeypat
         monkeypatch.setattr(recovery.shutil, "which", lambda name: None)
         enabled = client.get("/internal/pg-restore/tooling", headers=headers)
         assert enabled.status_code == 200
-        assert enabled.json() == {"installed": False, "enabled": False}
+        assert enabled.json()["installed"] is False
+        assert enabled.json()["enabled"] is False
+        assert isinstance(enabled.json()["vendor_stage"], str)
         assert client.post("/internal/pg-restore/start", headers=headers).status_code == 503
 
 
