@@ -27,3 +27,5 @@ jobs:
 # Retry once after checksum-pinned PostgreSQL 17 toolchain deployment.
 
 # Safe diagnostic recovery attempt after PR24 deployment.
+
+# Isolated PG17 acceptance after safe target identity diagnosis.
