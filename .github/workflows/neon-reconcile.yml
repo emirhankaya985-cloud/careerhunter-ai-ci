@@ -34,6 +34,10 @@ jobs:
           import time
           from careerhunter.render_scan_client import call, wait_ready
           wait_ready()
+          state = call("/internal/neon-cutover/state")
+          print("Live database identity (safe fields):", json.dumps(state, sort_keys=True))
+          if state.get("selected_target") != "render" or state.get("effective_backend") != "non_neon":
+              raise SystemExit("STOP: Render is not the active source; no cutover executed")
           result = None
           for attempt in range(12):
               try:
