@@ -18,8 +18,10 @@ def main() -> int:
         starting = call("/internal/pg-restore/start", method="POST")
     except RuntimeError:
         diagnostic = call("/internal/pg-restore/tooling").get("vendor_stage", "unknown")
-        raise RuntimeError("Isolated PG17 preparation blocked; safe_stage=" +
-                           str(diagnostic)[:70]) from None
+        flags = call("/internal/pg-restore/tooling").get("target_checks", {})
+        checks = ",".join(sorted(key for key, value in flags.items() if value is False))
+        raise RuntimeError("Isolated restore preflight blocked; safe_stage=" +
+                           str(diagnostic)[:70] + "; failed_checks=" + checks[:140]) from None
     if starting.get("status") != "running":
         raise RuntimeError("Restore acceptance cannot start")
     for _ in range(60):

@@ -158,12 +158,30 @@ def _auth(request: Request) -> None:
                          events=frozenset({"workflow_dispatch"}))
 
 
+def _safe_target_checks() -> dict[str, bool]:
+    """Only signed owner workflow sees booleans, never DSN or identities."""
+    try:
+        from .private_site import _settings
+
+        url = make_url(_settings()[2])
+        return {
+            "backend_postgresql": url.get_backend_name() == "postgresql",
+            "hostname_is_neon": (url.host or "").lower().endswith(".neon.tech"),
+            "database_is_live": url.database == "careerhunter_live",
+            "username_present": bool(url.username),
+            "password_present": bool(url.password),
+        }
+    except (ValueError, TypeError, RuntimeError):
+        return {"settings_valid": False}
+
+
 @router.get("/internal/pg-restore/tooling")
 def tools_available(request: Request) -> dict:
     _auth(request)
     return {"installed": _installed(),
             "enabled": os.getenv("CAREERHUNTER_PG_RESTORE_ENABLED") == "true",
-            "vendor_stage": last_stage()}
+            "vendor_stage": last_stage(),
+            "target_checks": _safe_target_checks()}
 
 
 @router.post("/internal/pg-restore/start")
