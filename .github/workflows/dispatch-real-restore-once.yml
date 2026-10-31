@@ -23,3 +23,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: gh workflow run pg-restore-acceptance.yml --repo "$GH_REPO" --ref main
+
+# Retry once after checksum-pinned PostgreSQL 17 toolchain deployment.
