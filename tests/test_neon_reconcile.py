@@ -75,10 +75,20 @@ def test_bad_url_is_not_accepted(client, monkeypatch, invalid):
         neon_reconcile._connections()
 
 
-def test_preflight_rejects_neon_primary(client, monkeypatch):
+def test_preflight_uses_unchanged_render_source_even_if_neon_is_primary(client, monkeypatch):
     monkeypatch.setenv("CAREERHUNTER_DB_TARGET", "neon")
-    with pytest.raises(RuntimeError, match="Render must remain primary"):
-        neon_reconcile._connections()
+    monkeypatch.setenv(
+        "DASHBOARD_DATABASE_URL",
+        "postgresql://render_reader:test@dpg-example.frankfurt-postgres.render.com/careerhunter_ai_db",
+    )
+    monkeypatch.setenv(
+        "CAREERHUNTER_NEON_DATABASE_URL",
+        "postgresql://neon_writer:test@ep-example.eu-central-1.aws.neon.tech/careerhunter_live",
+    )
+    old, new = neon_reconcile._connections()
+    assert "dpg-example" in old
+    assert "careerhunter_live" in new
+    assert old != new
 
 
 def test_unavailable_database_does_not_leak_details(client, monkeypatch):
