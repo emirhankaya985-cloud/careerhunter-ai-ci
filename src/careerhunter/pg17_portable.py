@@ -57,28 +57,46 @@ def _fetch(relative: str, expected_sha256: str, output: Path) -> None:
     output.write_bytes(content)
 
 
+_LAST_STAGE = "not_attempted"
+
+
+def last_stage() -> str:
+    """Constant-label diagnostic; never contains a credential or URL."""
+    return _LAST_STAGE
+
+
 def install() -> None:
-    if platform.machine() != "x86_64" or not shutil.which("dpkg-deb"):
-        raise RuntimeError("Unsupported PG17 execution platform")
-    with tempfile.TemporaryDirectory(prefix="careerhunter-pg17-fetch-") as directory:
-        tmp = Path(directory)
-        for index, (path, digest) in enumerate(PACKAGES):
-            archive = tmp / f"client-{index}.deb"
-            _fetch(path, digest, archive)
-            ROOT.mkdir(parents=True, exist_ok=True)
-            subprocess.run(
-                ["dpkg-deb", "-x", str(archive), str(ROOT)],
-                timeout=25, check=True, stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+    global _LAST_STAGE
+    stage = "platform"
+    try:
+        if platform.machine() != "x86_64" or not shutil.which("dpkg-deb"):
+            raise RuntimeError("Unsupported PG17 execution platform")
+        with tempfile.TemporaryDirectory(prefix="careerhunter-pg17-fetch-") as directory:
+            tmp = Path(directory)
+            for index, (path, digest) in enumerate(PACKAGES):
+                archive = tmp / f"client-{index}.deb"
+                stage = f"download_{index}"
+                _fetch(path, digest, archive)
+                stage = f"extract_{index}"
+                ROOT.mkdir(parents=True, exist_ok=True)
+                subprocess.run(
+                    ["dpkg-deb", "-x", str(archive), str(ROOT)],
+                    timeout=25, check=True, stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+        env = command_env(os.environ)
+        for binary in ("pg_dump", "pg_restore"):
+            stage = f"version_{binary}"
+            executable = binary_path(binary)
+            if not executable:
+                raise RuntimeError("Executable missing after verified extraction")
+            check = subprocess.run(
+                [executable, "--version"], env=env, timeout=8, check=True,
+                capture_output=True, text=True,
             )
-    env = command_env(os.environ)
-    for binary in ("pg_dump", "pg_restore"):
-        executable = binary_path(binary)
-        if not executable:
-            raise RuntimeError("PG17 executable missing after verified extraction")
-        check = subprocess.run(
-            [executable, "--version"], env=env, timeout=8, check=True,
-            capture_output=True, text=True,
-        )
-        if "PostgreSQL) 17." not in check.stdout:
-            raise RuntimeError("PG17 version validation failed")
+            if "PostgreSQL) 17." not in check.stdout:
+                raise RuntimeError("PG17 version validation failed")
+    except Exception as exc:
+        _LAST_STAGE = f"{stage}:{type(exc).__name__}"
+        raise
+    _LAST_STAGE = "verified"
