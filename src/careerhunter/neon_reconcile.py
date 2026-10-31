@@ -15,7 +15,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
-from .database import metadata, jobs, runs
+from .database import metadata, jobs, runs, company_signals
 from .pg_transfer import _check_urls, _fingerprint, _source_counts, _start_snapshot, _row_digest
 from .scheduled_scan import REPO, _require_github_oidc
 
@@ -70,7 +70,7 @@ def _source_preserved(left, right, source_counts: dict, target_counts: dict) -> 
             or target_counts["runs"] < source_counts["runs"]):
         return False
     for table in metadata.sorted_tables:
-        if table.name in {"jobs", "runs"}:
+        if table.name in {"jobs", "runs", "company_signals"}:
             continue
         if _fingerprint(left, table) != _fingerprint(right, table):
             return False
@@ -91,6 +91,31 @@ def _source_preserved(left, right, source_counts: dict, target_counts: dict) -> 
         updated = new_jobs.get(key)
         if (updated is None or updated[0] != first_seen
                 or _stamp(updated[1]) < _stamp(last_seen)):
+            return False
+
+    # Signals are legitimately refreshed during each successful scan.
+    # Every old identity/company/type must remain, and its observation cannot
+    # move backward; claim and payload may reflect newer public evidence.
+    signal_cols = (
+        company_signals.c.signal_id, company_signals.c.company_id,
+        company_signals.c.company, company_signals.c.signal_type,
+        company_signals.c.observed_at,
+    )
+    old_signals = {
+        row.signal_id: (row.company_id, row.company, row.signal_type, row.observed_at)
+        for row in left.execute(select(*signal_cols))
+    }
+    new_signals = {
+        row.signal_id: (row.company_id, row.company, row.signal_type, row.observed_at)
+        for row in right.execute(select(*signal_cols))
+    }
+    if (len(old_signals) != source_counts["company_signals"]
+            or len(new_signals) != target_counts["company_signals"]):
+        return False
+    for signal_id, original in old_signals.items():
+        fresh = new_signals.get(signal_id)
+        if (fresh is None or fresh[:3] != original[:3]
+                or _stamp(fresh[3]) < _stamp(original[3])):
             return False
 
     old_runs = {
