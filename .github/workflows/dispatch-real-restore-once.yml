@@ -1,0 +1,25 @@
+name: CareerHunter One-Time Restore Acceptance Trigger
+
+# This file runs only when its own main-branch content changes.
+# It dispatches the already reviewed, exact-OIDC-guarded restore acceptance.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/dispatch-real-restore-once.yml
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    if: github.repository == 'emirhankaya985-cloud/careerhunter-ai-ci'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Dispatch the isolated recovery proof once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run pg-restore-acceptance.yml --repo "$GH_REPO" --ref main
