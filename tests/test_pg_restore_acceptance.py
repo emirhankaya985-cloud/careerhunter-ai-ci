@@ -92,3 +92,14 @@ def test_neon_postgres17_requires_matching_real_client_binaries(monkeypatch):
     monkeypatch.setattr(recovery.subprocess, "run", lambda *args, **kwargs:
                         SimpleNamespace(stdout="pg_restore (PostgreSQL) 15.4"))
     assert recovery._installed() is False
+
+
+def test_accepts_pgdg_debian_version_suffix(monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(recovery.shutil, "which", lambda value: "/usr/bin/" + value)
+    monkeypatch.setattr(recovery.subprocess, "run", lambda *a, **k:
+                        SimpleNamespace(stdout="pg_dump (PostgreSQL) 17.11 "
+                                              "(Debian 17.11-1.pgdg12+2)"))
+    assert recovery._client_major("pg_dump") == 17
+    assert recovery._client_major("pg_restore") == 17
