@@ -20,7 +20,7 @@ from sqlalchemy.engine import make_url
 
 from .database import metadata
 from .pg_transfer import _fingerprint, _source_counts
-from .pg17_portable import binary_path, command_env, install
+from .pg17_portable import binary_path, command_env, install, last_stage
 from .scheduled_scan import REPO, _require_github_oidc
 
 router = APIRouter()
@@ -162,7 +162,8 @@ def _auth(request: Request) -> None:
 def tools_available(request: Request) -> dict:
     _auth(request)
     return {"installed": _installed(),
-            "enabled": os.getenv("CAREERHUNTER_PG_RESTORE_ENABLED") == "true"}
+            "enabled": os.getenv("CAREERHUNTER_PG_RESTORE_ENABLED") == "true",
+            "vendor_stage": last_stage()}
 
 
 @router.post("/internal/pg-restore/start")
