@@ -79,8 +79,8 @@ def _check() -> None:
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             if Path(archive).stat().st_size < 1024:
                 raise RuntimeError("archive_too_small")
-            # --clean is strictly limited to the pre-verified, empty scratch DB.
-            subprocess.run(["pg_restore", "--clean", "--if-exists", "--exit-on-error",
+            # Populate only a verified empty scratch database; never issue drops.
+            subprocess.run(["pg_restore", "--exit-on-error",
                             "--no-owner", "--no-acl", "--no-password",
                             "--dbname", SCRATCH, archive],
                            env=_env(destination), check=True, timeout=300,
