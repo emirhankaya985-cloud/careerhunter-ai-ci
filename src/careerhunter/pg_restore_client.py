@@ -14,7 +14,12 @@ def main() -> int:
         print("INFO: checking checksum-pinned PostgreSQL 17 portable toolchain")
     if tools.get("enabled") is not True:
         raise RuntimeError("Restore acceptance is not enabled in Render")
-    starting = call("/internal/pg-restore/start", method="POST")
+    try:
+        starting = call("/internal/pg-restore/start", method="POST")
+    except RuntimeError:
+        diagnostic = call("/internal/pg-restore/tooling").get("vendor_stage", "unknown")
+        raise RuntimeError("Isolated PG17 preparation blocked; safe_stage=" +
+                           str(diagnostic)[:70]) from None
     if starting.get("status") != "running":
         raise RuntimeError("Restore acceptance cannot start")
     for _ in range(60):
