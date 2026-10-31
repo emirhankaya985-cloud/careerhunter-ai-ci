@@ -55,20 +55,31 @@ jobs:
               raise SystemExit("FAIL: reconciliation route unavailable")
           left = result.get("source_counts")
           right = result.get("target_counts")
-          if (
-              result.get("status") != "match"
-              or result.get("all_row_hashes_equal") is not True
-              or result.get("production_cutover_performed") is not False
-              or not isinstance(left, dict)
-              or left != right
-              or len(left) != 10
-              or int(left.get("jobs", 0)) < 1
-          ):
-              print("FAIL: source and Neon data are not exactly equal")
-              print("Source table counts:", left)
-              print("Neon table counts:", right)
+          if (not isinstance(left, dict) or not isinstance(right, dict)
+                  or len(left) != 10 or len(right) != 10
+                  or int(left.get("jobs", 0)) < 1
+                  or result.get("source_preservation_verified") is not True):
+              print("FAIL: legacy Render data has not been proven preserved in Neon")
+              print("Original Render counts:", left)
+              print("Live Neon counts:", right)
               raise SystemExit(1)
-          print("PASS: exact content match of all ten tables")
-          print("Equal row counts:", json.dumps(left, sort_keys=True))
-          print("PASS: Render source and production connection unchanged")
+          status = result.get("status")
+          if status == "match":
+              if result.get("all_row_hashes_equal") is not True or left != right:
+                  raise SystemExit("FAIL: matching status lacks exact row proof")
+              print("PASS: all ten tables byte-equivalent")
+          elif status == "source_preserved_with_new_neon_rows":
+              if (result.get("all_row_hashes_equal") is not False
+                      or int(result.get("new_neon_jobs", -1)) != int(right["jobs"]) - int(left["jobs"])
+                      or int(result.get("new_neon_runs", -1)) != int(right["runs"]) - int(left["runs"])):
+                  raise SystemExit("FAIL: post-cutover preservation metadata invalid")
+              print("PASS: every original job ID and first-seen date preserved")
+              print("PASS: historical runs and eight other tables remain identical")
+              print("Newer Neon jobs:", result.get("new_neon_jobs"))
+              print("Newer Neon runs:", result.get("new_neon_runs"))
+          else:
+              raise SystemExit("FAIL: Render source records missing or changed unexpectedly")
+          print("Original Render counts:", json.dumps(left, sort_keys=True))
+          print("Live Neon counts:", json.dumps(right, sort_keys=True))
+          print("Source was never written by this check")
           PY

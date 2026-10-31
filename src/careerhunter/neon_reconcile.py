@@ -8,14 +8,15 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
-from .database import metadata
-from .pg_transfer import _check_urls, _fingerprint, _source_counts, _start_snapshot
+from .database import metadata, jobs, runs
+from .pg_transfer import _check_urls, _fingerprint, _source_counts, _start_snapshot, _row_digest
 from .scheduled_scan import REPO, _require_github_oidc
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,59 @@ def _connections() -> tuple[str, str]:
     return source, target
 
 
+def _stamp(value: str) -> datetime:
+    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _source_preserved(left, right, source_counts: dict, target_counts: dict) -> bool:
+    """Prove original rows survive after new Neon scans updated job fields.
+
+    An operational daily scan legitimately updates existing job payloads and
+    timestamps, so strict byte equality would incorrectly fail post-cutover.
+    All source job identities and first-seen dates must be preserved; last-seen
+    may only increase. Historical runs and every other table remain identical.
+    """
+    if (target_counts["jobs"] < source_counts["jobs"]
+            or target_counts["runs"] < source_counts["runs"]):
+        return False
+    for table in metadata.sorted_tables:
+        if table.name in {"jobs", "runs"}:
+            continue
+        if _fingerprint(left, table) != _fingerprint(right, table):
+            return False
+
+    fields = (jobs.c.source, jobs.c.job_id, jobs.c.first_seen_at,
+              jobs.c.last_seen_at)
+    old_jobs = {
+        (row.source, row.job_id): (row.first_seen_at, row.last_seen_at)
+        for row in left.execute(select(*fields))
+    }
+    new_jobs = {
+        (row.source, row.job_id): (row.first_seen_at, row.last_seen_at)
+        for row in right.execute(select(*fields))
+    }
+    if len(old_jobs) != source_counts["jobs"] or len(new_jobs) != target_counts["jobs"]:
+        return False
+    for key, (first_seen, last_seen) in old_jobs.items():
+        updated = new_jobs.get(key)
+        if (updated is None or updated[0] != first_seen
+                or _stamp(updated[1]) < _stamp(last_seen)):
+            return False
+
+    old_runs = {
+        int(row["id"]): _row_digest(dict(row))
+        for row in left.execute(select(runs)).mappings()
+    }
+    new_runs = {
+        int(row["id"]): _row_digest(dict(row))
+        for row in right.execute(select(runs)).mappings()
+    }
+    return (len(old_runs) == source_counts["runs"]
+            and len(new_runs) == target_counts["runs"]
+            and all(new_runs.get(key) == value for key, value in old_runs.items()))
+
+
 def _compare(source_url: str, target_url: str) -> dict:
     options = {"connect_args": {"options": "-c default_transaction_read_only=on"}}
     source = create_engine(source_url, pool_pre_ping=True, **options)
@@ -70,12 +124,18 @@ def _compare(source_url: str, target_url: str) -> dict:
                     if _fingerprint(left, table) != _fingerprint(right, table):
                         exact = False
                         break
+            preserved = exact or _source_preserved(left, right, source_counts, target_counts)
             return {
-                "status": "match" if exact else "mismatch",
+                "status": ("match" if exact else
+                           "source_preserved_with_new_neon_rows" if preserved else "mismatch"),
                 "source_counts": source_counts,
                 "target_counts": target_counts,
                 "all_row_hashes_equal": exact,
-                "production_cutover_performed": False,
+                "source_preservation_verified": preserved,
+                "new_neon_jobs": target_counts["jobs"] - source_counts["jobs"],
+                "new_neon_runs": target_counts["runs"] - source_counts["runs"],
+                "production_cutover_performed": (
+                    os.getenv("CAREERHUNTER_DB_TARGET", "render").strip().lower() == "neon"),
             }
     finally:
         source.dispose()
