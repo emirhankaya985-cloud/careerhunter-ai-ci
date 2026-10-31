@@ -1,0 +1,25 @@
+name: CareerHunter Real pg_restore Acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: careerhunter-production-collector
+  cancel-in-progress: false
+
+jobs:
+  archive-restore:
+    if: github.repository == 'emirhankaya985-cloud/careerhunter-ai-ci' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify isolated production archive restore with real binaries
+        run: PYTHONPATH=src python -m careerhunter.pg_restore_client
