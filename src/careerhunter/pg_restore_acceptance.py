@@ -76,11 +76,16 @@ def _client_major(binary: str) -> int | None:
         )
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
         return None
-    parts = result.stdout.strip().split()
-    if len(parts) < 3 or "PostgreSQL" not in parts[-2]:
-        return None
-    major = parts[-1].split(".", 1)[0]
-    return int(major) if major.isdecimal() else None
+    # PGDG/Debian binaries can append packaging details after the version:
+    # "pg_dump (PostgreSQL) 17.11 (Debian 17.11-...)". Never parse the
+    # last whitespace-separated token, which is not necessarily the version.
+    import re
+    match = re.fullmatch(
+        r"pg_(?:dump|restore)\\s+\\(PostgreSQL\\)\\s+(\\d+)\\.\\d+"
+        r"(?:\\s+.*)?",
+        result.stdout.strip(),
+    )
+    return int(match.group(1)) if match else None
 
 
 def _installed() -> bool:
