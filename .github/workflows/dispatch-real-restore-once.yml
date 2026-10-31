@@ -25,3 +25,5 @@ jobs:
         run: gh workflow run pg-restore-acceptance.yml --repo "$GH_REPO" --ref main
 
 # Retry once after checksum-pinned PostgreSQL 17 toolchain deployment.
+
+# Safe diagnostic recovery attempt after PR24 deployment.
