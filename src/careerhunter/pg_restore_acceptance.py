@@ -81,8 +81,8 @@ def _client_major(binary: str) -> int | None:
     # last whitespace-separated token, which is not necessarily the version.
     import re
     match = re.fullmatch(
-        r"pg_(?:dump|restore)\\s+\\(PostgreSQL\\)\\s+(\\d+)\\.\\d+"
-        r"(?:\\s+.*)?",
+        r"pg_(?:dump|restore)\s+\(PostgreSQL\)\s+(\d+)\.\d+"
+        r"(?:\s+.*)?",
         result.stdout.strip(),
     )
     return int(match.group(1)) if match else None
