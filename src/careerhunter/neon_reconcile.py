@@ -39,7 +39,7 @@ def _connections() -> tuple[str, str]:
         ):
             raise ValueError("Invalid dedicated Neon target")
         source, target = _check_urls(source, target, False)
-    except (ArgumentError, ValueError, TypeError) as exc:
+    except (ArgumentError, ValueError, TypeError):
         raise RuntimeError("Reconciliation cannot access a verified Neon target") from None
     if not source.startswith("postgresql+psycopg://"):
         raise RuntimeError("Source must be hosted PostgreSQL")
