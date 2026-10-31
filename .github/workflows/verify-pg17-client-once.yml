@@ -1,0 +1,33 @@
+name: CareerHunter PG17 Vendor Binary Verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/verify-pg17-client-once.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify-pg17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify official Debian 12 PostgreSQL 17 client packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/careerhunter-pg17
+          cd /tmp/careerhunter-pg17
+          curl -fL --retry 2 --max-time 50 'https://apt.postgresql.org/pub/repos/apt/pool/main/p/postgresql-17/postgresql-client-17_17.11-1.pgdg12%2B2_amd64.deb' -o pg17.deb
+          curl -fL --retry 2 --max-time 50 'https://apt.postgresql.org/pub/repos/apt/pool/main/p/postgresql-18/libpq5_18.6-3.pgdg12%2B1_amd64.deb' -o libpq.deb
+          echo 'Verified official downloads; record package checksums:'
+          sha256sum pg17.deb libpq.deb
+          dpkg-deb -x pg17.deb unpack
+          dpkg-deb -x libpq.deb unpack
+          export LD_LIBRARY_PATH="$PWD/unpack/usr/lib/x86_64-linux-gnu"
+          echo 'PostgreSQL command versions:'
+          unpack/usr/lib/postgresql/17/bin/pg_dump --version
+          unpack/usr/lib/postgresql/17/bin/pg_restore --version
+          echo 'PASS: PostgreSQL 17 tools execute without root privileges'
