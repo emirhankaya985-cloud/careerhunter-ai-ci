@@ -59,6 +59,19 @@ jobs:
           status, url, body, _ = get("/healthz")
           assert status == 200 and body.strip() == "ok", "FAIL: application health endpoint"
           print("PASS: live app process health")
+          
+          # Main CI is not release proof. Verify Render's runtime SHA instead
+          # of treating a responsive old deployment as healthy.
+          expected = os.environ.get("GITHUB_SHA", "").strip().lower()
+          try:
+              version_code, _, deployed, _ = get("/versionz")
+          except (urllib.error.URLError, TimeoutError):
+              raise SystemExit("FAIL: Render release identity unavailable") from None
+          if (len(expected) != 40 or version_code != 200
+                  or deployed.strip().lower() != expected):
+              raise SystemExit("FAIL: Render live commit differs from GitHub main")
+          print("PASS: Render live SHA equals GitHub main")
+
 
           status, url, body, _ = get("/robots.txt")
           assert status == 200 and "Disallow: /" in body, (
