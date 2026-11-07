@@ -40,6 +40,16 @@ jobs:
                   time.sleep(15)
           status = result.get("status") if isinstance(result, dict) else "unavailable"
           print("Gmail server acceptance state:", status)
+          if status == "missing_render_oauth":
+              # Only allowlisted environment KEY NAMES, never their values or lengths.
+              allowed = {
+                  "GMAIL_READONLY_CLIENT_ID", "GMAIL_READONLY_CLIENT_SECRET",
+                  "GMAIL_READONLY_REFRESH_TOKEN",
+              }
+              missing = result.get("missing_key_names", [])
+              if not isinstance(missing, list) or any(x not in allowed for x in missing):
+                  raise SystemExit("FAIL: invalid safe OAuth diagnostics")
+              print("Missing Render OAuth variable names:", ", ".join(sorted(missing)))
           if status != "ready":
               raise SystemExit("FAIL: Render Gmail OAuth or explicit read-only opt-in is incomplete")
           if (result.get("read_only") is not True
