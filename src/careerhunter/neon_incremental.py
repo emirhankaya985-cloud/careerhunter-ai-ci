@@ -76,18 +76,21 @@ def _apply(writer: Connection, changes: dict) -> None:
         rows = changes[table.name]["new"] + changes[table.name]["changed"]
         if not rows:
             continue
-        stmt = (pg_insert(table) if backend == "postgresql" else sqlite_insert(table))
-        stmt = stmt.values(rows)
         primary = [column.name for column in table.primary_key.columns]
         non_key = [column.name for column in table.columns if column.name not in primary]
-        if changes[table.name]["changed"]:
-            statement = stmt.on_conflict_do_update(
-                index_elements=primary,
-                set_={name: getattr(stmt.excluded, name) for name in non_key},
-            )
-        else:
-            statement = stmt.on_conflict_do_nothing(index_elements=primary)
-        writer.execute(statement)
+        # Respect SQLite/PostgreSQL parameter budgets and avoid giant SQL batches.
+        for start in range(0, len(rows), 50):
+            batch = rows[start:start + 50]
+            stmt = (pg_insert(table) if backend == "postgresql" else sqlite_insert(table))
+            stmt = stmt.values(batch)
+            if changes[table.name]["changed"]:
+                statement = stmt.on_conflict_do_update(
+                    index_elements=primary,
+                    set_={name: getattr(stmt.excluded, name) for name in non_key},
+                )
+            else:
+                statement = stmt.on_conflict_do_nothing(index_elements=primary)
+            writer.execute(statement)
     if backend == "postgresql":
         seq = writer.execute(text("SELECT pg_get_serial_sequence('runs', 'id')")).scalar_one_or_none()
         maximum = writer.execute(select(func.max(runs.c.id))).scalar_one()
@@ -119,7 +122,9 @@ def synchronize(
     options = ({"connect_args": {"options": "-c default_transaction_read_only=on"}}
                if source_id.get_backend_name() == "postgresql" else {})
     source = create_engine(source_url, pool_pre_ping=True, **options)
-    target = create_engine(target_url, pool_pre_ping=True)
+    target_options = ({"connect_args": {"options": "-c default_transaction_read_only=on"}}
+                      if not apply and target_id.get_backend_name() == "postgresql" else {})
+    target = create_engine(target_url, pool_pre_ping=True, **target_options)
     try:
         with source.connect() as reader:
             _start_snapshot(reader)
