@@ -49,6 +49,28 @@ def _quality_reasons(payload: dict) -> str:
     )
 
 
+COUNTRY_SIGNAL_LABELS = (
+    ("US", "ABD"), ("GB", "BK"), ("AU", "Avustralya"), ("TR", "Türkiye"),
+)
+
+
+def _country_line(payload: dict) -> str:
+    """Display only explicit country hints, never unverified work eligibility."""
+    counts = payload.get("country_signals")
+    if counts is None:
+        return ""
+    if not isinstance(counts, dict):
+        raise ValueError("Invalid country-signal summary")
+    parsed = []
+    total = int(payload.get("jobs_new", 0))
+    for code, label in COUNTRY_SIGNAL_LABELS:
+        raw = counts.get(code, 0)
+        if isinstance(raw, bool) or not isinstance(raw, int) or not 0 <= raw <= total:
+            raise ValueError("Invalid country-signal count")
+        parsed.append(f"{label}: {raw}")
+    return "🌍 İlanlarda ülke sinyali (uygunluk kanıtı değil): " + " · ".join(parsed)
+
+
 def _score(job: dict) -> int:
     try:
         return max(0, min(100, int(job.get("score") or 0)))
@@ -111,6 +133,8 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
             )
         else:
             lines.append("Bugün yeni ilan yok. Sistem günlük taramasını tamamladı. ✅")
+        if country_line := _country_line(payload):
+            lines.append(country_line)
         if explanation := _quality_reasons(payload):
             lines.append(explanation)
         return [("\n".join(lines), [])]
@@ -125,6 +149,8 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
             f"✅ Öncelikli (junior + konum sinyali): <b>{sum(_priority(j, threshold) for j in items)}</b> / paylaşılan {len(items)}",
             f"📦 Bölüm {part + 1}/{count}",
         ]
+        if part == 0 and (country_line := _country_line(payload)):
+            lines.append(country_line)
         if part == 0 and (explanation := _quality_reasons(payload)):
             lines.append(explanation)
         lines.append("")
