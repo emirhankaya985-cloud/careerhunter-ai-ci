@@ -25,7 +25,7 @@ from .scheduled_scan import REPO, _require_github_oidc
 
 router = APIRouter()
 WORKFLOW = REPO + "/.github/workflows/pg-restore-acceptance.yml@refs/heads/main"
-SCRATCH = "careerhunter_restore_probe_20261031"
+SCRATCH = "careerhunter_restore_probe_20261107"
 _lock = threading.Lock()
 _state: dict[str, object] = {"status": "idle"}
 logger = logging.getLogger(__name__)
