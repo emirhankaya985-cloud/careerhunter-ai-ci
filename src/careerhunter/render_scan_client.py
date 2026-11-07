@@ -34,17 +34,37 @@ def token() -> str:
 
 
 def call(path: str, method: str = "GET") -> dict:
-    request = Request(
-        BASE + path,
-        method=method,
-        headers={"Authorization": "Bearer " + token(), "User-Agent": "CareerHunter-GHA/1.0"},
-    )
-    try:
-        with urlopen(request, timeout=100) as response:
-            return json.load(response)
-    except HTTPError as exc:
-        # Intentionally never print JWT or response bodies from unexpected failures.
-        raise RuntimeError(f"Render endpoint {path} returned HTTP {exc.code}") from None
+    """Replay only side-effect-free GET probes on transient Render failures.
+
+    POST /scan may have already started work if its response was lost, so
+    automatically retrying POST would risk duplicate concurrent collectors.
+    """
+    if not path.startswith("/") or method not in {"GET", "POST"}:
+        raise ValueError("Invalid Render API request")
+    retryable = method == "GET"
+    attempts = 3 if retryable else 1
+    for attempt in range(attempts):
+        request = Request(
+            BASE + path,
+            method=method,
+            headers={"Authorization": "Bearer " + token(),
+                     "User-Agent": "CareerHunter-GHA/1.0"},
+        )
+        try:
+            with urlopen(request, timeout=100) as response:
+                return json.load(response)
+        except HTTPError as exc:
+            # No JWT, provider error body, or full URL in diagnostics.
+            if retryable and exc.code in {408, 429, 500, 502, 503, 504} and attempt < 2:
+                time.sleep(2 ** attempt)
+                continue
+            raise RuntimeError(f"Render endpoint {path} returned HTTP {exc.code}") from None
+        except (URLError, TimeoutError):
+            if retryable and attempt < 2:
+                time.sleep(2 ** attempt)
+                continue
+            raise RuntimeError("Render API transport unavailable") from None
+    raise RuntimeError("Render GET retry budget exhausted")
 
 
 def wait_ready() -> None:
