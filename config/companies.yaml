@@ -37,11 +37,11 @@ companies:
     team_url: https://linear.app/careers
     countries: [US, GB, AU]
   - name: Insider
-    greenhouse: insider
-    team_url: https://useinsider.com/careers/
+    lever: insiderone
+    team_url: https://jobs.lever.co/insiderone
     countries: [TR]
   - name: Peak
-    greenhouse: peak
-    team_url: https://www.peak.com/careers/
+    lever: peakgames
+    team_url: https://jobs.lever.co/peakgames
     countries: [TR]
 
