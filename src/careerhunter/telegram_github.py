@@ -53,7 +53,13 @@ def send(text: str, buttons: list[dict] | None = None) -> bool:
                 return False
             reply = json.load(response)
         receipt = (reply.get("result") or {}).get("message_id")
-        return reply.get("ok") is True and isinstance(receipt, int) and receipt > 0
+        # bool is a subclass of int: reject True and any non-positive ID.
+        if reply.get("ok") is True and type(receipt) is int and receipt > 0:
+            # Store only the provider-confirmed message ID in the workflow log,
+            # never the chat ID, bot token, sender or message content.
+            print(f"PASS: Telegram API receipt message_id={receipt}")
+            return True
+        return False
     except HTTPError as exc:
         # Never print the exception, URL, response JSON, chat ID or token.
         # Telegram error descriptions can contain arbitrary data, so permit
