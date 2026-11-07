@@ -70,7 +70,8 @@ def summarize(signals: list[InboxSignal]) -> InboxSummary:
     )
 
 
-def read_readonly(*, max_results: int = 20, client: httpx.Client | None = None) -> InboxSummary:
+def read_readonly(*, max_results: int = 20, client: httpx.Client | None = None,
+                  ledger_url: str | None = None) -> InboxSummary:
     """Fetch recent owner inbox entries using fixed queries and no write scopes."""
     if not configured():
         raise RuntimeError("Gmail readonly OAuth connection not configured")
@@ -101,6 +102,7 @@ def read_readonly(*, max_results: int = 20, client: httpx.Client | None = None) 
             signals: list[InboxSignal] = []
             seen = set()
             seen_message_ids = set()
+            ledger_items: list[tuple[str, str | None, InboxSignal]] = []
             for record in candidates:
                 if not isinstance(record, dict) or not _ID.fullmatch(str(record.get("id", ""))):
                     raise RuntimeError("Gmail message identifier is invalid")
@@ -121,6 +123,18 @@ def read_readonly(*, max_results: int = 20, client: httpx.Client | None = None) 
                 if signal.id_hash not in seen:
                     seen.add(signal.id_hash)
                     signals.append(signal)
+                    thread_id = record.get("threadId")
+                    if thread_id is not None and not _ID.fullmatch(str(thread_id)):
+                        raise RuntimeError("Gmail thread identifier is invalid")
+                    ledger_items.append((record["id"], str(thread_id) if thread_id else None,
+                                         signal))
+            if ledger_url is not None:
+                from .gmail_ledger import retain_unseen
+                try:
+                    signals = retain_unseen(ledger_url, ledger_items)
+                except Exception:
+                    # Never surface database driver errors (which can contain DSNs).
+                    raise GmailReadError("ledger_unavailable") from None
             return summarize(signals)
     except httpx.HTTPStatusError as exc:
         # Only fixed codes based on endpoint and HTTP status; never API response bodies.
