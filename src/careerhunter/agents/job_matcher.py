@@ -55,9 +55,14 @@ class RuleBasedMatcher:
         self.keywords = keywords
 
     def score(self, job: Job) -> Job:
-        title = job.title.casefold()
-        location = job.location.casefold()
-        text = f"{job.title} {job.location} {job.description[:18000]}".casefold()
+        # Turkish capital dotted İ casefolds to i + combining dot. Normalize
+        # that pair so a city spelled İstanbul matches the same as Istanbul.
+        def fold(value: str) -> str:
+            return value.casefold().replace("i\u0307", "i")
+
+        title = fold(job.title)
+        location = fold(job.location)
+        text = fold(f"{job.title} {job.location} {job.description[:18000]}")
         # Some ATS feeds encode Remote Worldwide only in the location field.
         # Do not infer global work eligibility from a bare "Remote" label.
         remote = (job.remote_type == "remote" or _contains(title, "remote")
