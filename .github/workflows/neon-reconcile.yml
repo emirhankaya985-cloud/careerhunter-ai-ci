@@ -1,6 +1,7 @@
 name: CareerHunter Neon Exact Reconciliation (read-only)
 
 # One-time signed main push probe; manual reruns require a fresh GitHub OIDC token.
+# Revalidate 2026-11-07 Render/Neon drift after verified Render release.
 on:
   workflow_dispatch:
   push:
