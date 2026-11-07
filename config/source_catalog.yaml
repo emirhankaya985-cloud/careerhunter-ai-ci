@@ -29,19 +29,19 @@ sources:
     countries: [US, GB, AU]
     endpoint: https://api.ashbyhq.com/posting-api/job-board/linear
     careers_url: https://linear.app/careers
-  # Turkey-focused official Greenhouse boards. These are real ATS JSON
-  # endpoints; country counts still come from each posting's location text.
-  - id: greenhouse-insider
+  # Turkey-focused official Lever boards verified on 2026-11-07.
+  # Country counts must still use each posting's location, not this hint.
+  - id: lever-insiderone
     company: Insider
-    provider: greenhouse
-    slug: insider
+    provider: lever
+    slug: insiderone
     countries: [TR]
-    endpoint: https://boards-api.greenhouse.io/v1/boards/insider/jobs?content=true
-    careers_url: https://useinsider.com/careers/
-  - id: greenhouse-peak
+    endpoint: https://api.lever.co/v0/postings/insiderone?mode=json
+    careers_url: https://jobs.lever.co/insiderone
+  - id: lever-peakgames
     company: Peak
-    provider: greenhouse
-    slug: peak
+    provider: lever
+    slug: peakgames
     countries: [TR]
-    endpoint: https://boards-api.greenhouse.io/v1/boards/peak/jobs?content=true
-    careers_url: https://www.peak.com/careers/
+    endpoint: https://api.lever.co/v0/postings/peakgames?mode=json
+    careers_url: https://jobs.lever.co/peakgames
