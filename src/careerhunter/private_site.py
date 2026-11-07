@@ -51,7 +51,14 @@ def _settings() -> tuple[str, str, str, bool]:
     # A Neon opt-in changes only the effective connection used by all app
     # readers, OIDC scanners and digest routes (via this shared _settings).
     database = os.environ.get("DASHBOARD_DATABASE_URL", "")
-    target = os.environ.get("CAREERHUNTER_DB_TARGET", "render").strip().lower()
+    explicit_target = os.environ.get("CAREERHUNTER_DB_TARGET")
+    target = (explicit_target if explicit_target is not None else "render").strip().lower()
+    # Do not silently fall back to the expiring legacy Render database if the
+    # target selector disappears from a Neon-configured production deployment.
+    # A deliberate, explicitly selected "render" rollback still works.
+    if (os.environ.get("RENDER") and explicit_target is None
+            and os.environ.get("CAREERHUNTER_NEON_DATABASE_URL", "").strip()):
+        raise RuntimeError("Production database target must be explicit with Neon configured")
     if target == "neon":
         neon = os.environ.get("CAREERHUNTER_NEON_DATABASE_URL", "")
         try:
