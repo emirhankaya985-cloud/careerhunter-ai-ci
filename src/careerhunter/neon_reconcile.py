@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import create_engine, select
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import ArgumentError
+from sqlalchemy.exc import ArgumentError, OperationalError
 
 from .database import metadata, jobs, runs, company_signals
 from .pg_transfer import _check_urls, _fingerprint, _source_counts, _start_snapshot, _row_digest
@@ -167,6 +168,23 @@ def _compare(source_url: str, target_url: str) -> dict:
         target.dispose()
 
 
+
+def _compare_with_retry(source_url: str, target_url: str) -> dict:
+    """Only replay read-only snapshot comparisons on transient DB connection failure.
+
+    Every attempt creates fresh REPEATABLE READ, READ ONLY snapshots.  No
+    partial result can be accepted and no transfer or cutover is triggered.
+    """
+    for attempt in range(3):
+        try:
+            return _compare(source_url, target_url)
+        except OperationalError:
+            if attempt == 2:
+                raise
+            time.sleep(2 ** attempt)
+    raise RuntimeError("Read-only reconciliation retries exhausted")
+
+
 @router.get("/internal/neon-cutover/preflight")
 def neon_preflight(request: Request) -> dict:
     _require_github_oidc(
@@ -177,7 +195,7 @@ def neon_preflight(request: Request) -> dict:
     try:
         source, target = _connections()
         stage = "read_only_compare"
-        return _compare(source, target)
+        return _compare_with_retry(source, target)
     except Exception as exc:
         # Fixed diagnostic codes only; SQL driver exceptions may contain
         # connection details and must never be included in application logs.
