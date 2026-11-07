@@ -544,5 +544,8 @@ def gmail_review_summary(request: Request) -> dict[str, object]:
         return {"status": "disabled", "reason": "owner_opt_in_required"}
     if not configured():
         return {"status": "not_configured", "reason": "private_oauth_missing"}
-    # No sender details, message bodies, subject lines, Gmail IDs or secret data.
-    return read_readonly(max_results=20).as_dict()
+    if os.getenv("CAREERHUNTER_GMAIL_LEDGER_ENABLED") != "true":
+        return {"status": "ledger_disabled", "reason": "durable_dedupe_opt_in_required"}
+    # Preserve state across scheduled runs. No raw Gmail identifiers leave Render.
+    from .private_site import _settings
+    return read_readonly(max_results=20, ledger_url=_settings()[2]).as_dict()

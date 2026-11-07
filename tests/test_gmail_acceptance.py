@@ -49,7 +49,13 @@ def test_missing_oauth_returns_only_safe_status(client, monkeypatch):
     monkeypatch.setenv("CAREERHUNTER_GMAIL_READONLY_ENABLED", "true")
     monkeypatch.setattr(gmail_reader, "configured", lambda: False)
     r = client.get("/internal/gmail/acceptance", headers=h)
-    assert r.json() == {"status": "missing_render_oauth", "read_only": True}
+    data = r.json()
+    assert data["status"] == "missing_render_oauth" and data["read_only"] is True
+    assert set(data["missing_key_names"]) == {
+        "GMAIL_READONLY_CLIENT_ID", "GMAIL_READONLY_CLIENT_SECRET",
+        "GMAIL_READONLY_REFRESH_TOKEN",
+    }
+    assert "token_value" not in r.text
 
 
 def test_read_only_acceptance_never_exposes_message_contents(client, monkeypatch):

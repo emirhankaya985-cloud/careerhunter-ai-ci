@@ -22,7 +22,12 @@ def gmail_acceptance(request: Request) -> dict:
     if os.getenv("CAREERHUNTER_GMAIL_READONLY_ENABLED") != "true":
         return {"status": "disabled", "read_only": True}
     if not configured():
-        return {"status": "missing_render_oauth", "read_only": True}
+        keys = ("GMAIL_READONLY_CLIENT_ID", "GMAIL_READONLY_CLIENT_SECRET",
+                "GMAIL_READONLY_REFRESH_TOKEN")
+        # Key *names* only: never return length, prefix or value of any secret.
+        missing = [key for key in keys if not os.getenv(key, "").strip()]
+        return {"status": "missing_render_oauth", "missing_key_names": missing,
+                "read_only": True}
     try:
         summary = read_readonly(max_results=3)
         return {

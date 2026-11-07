@@ -53,8 +53,10 @@ def test_gmail_endpoint_requires_signed_exact_workflow(client, monkeypatch):
     monkeypatch.setattr(gmail_reader, "configured", lambda: False)
     assert c.get(path, headers=headers).json()["status"] == "not_configured"
     monkeypatch.setattr(gmail_reader, "configured", lambda: True)
+    assert c.get(path, headers=headers).json()["status"] == "ledger_disabled"
+    monkeypatch.setenv("CAREERHUNTER_GMAIL_LEDGER_ENABLED", "true")
     monkeypatch.setattr(gmail_reader, "read_readonly",
-                        lambda max_results: InboxSummary(
+                        lambda max_results, ledger_url: InboxSummary(
                             scanned=2, categories={"interview": 1, "needs_review": 1},
                             review_required=2))
     r = c.get(path, headers=headers)

@@ -21,11 +21,13 @@ def prepare(data: dict) -> str:
     if (scanned < 0 or review_required < 0 or review_required > scanned
             or not isinstance(categories, dict)):
         raise ValueError("Gmail summary counts invalid")
-    names = {"interview": "Mülakat olasılığı", "assessment": "Teknik test olasılığı",
+    names = {"application": "Başvuru alındı olasılığı",
+             "followup": "Takip / başvuru güncellemesi olasılığı",
+             "interview": "Mülakat olasılığı", "assessment": "Teknik test olasılığı",
              "rejection": "Ret olasılığı", "needs_review": "Diğer / belirsiz"}
     result = [
         "📨 <b>CareerHunter AI | Gmail başvuru incelemesi</b>",
-        f"📬 Son 24 saatte incelenen ileti: <b>{scanned}</b>",
+        f"📬 Son 24 saatte ilk kez sınıflandırılan ileti: <b>{scanned}</b>",
     ]
     for code, label in names.items():
         try:
