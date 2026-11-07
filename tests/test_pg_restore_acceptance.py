@@ -19,7 +19,7 @@ def test_accepts_only_neon_live_as_source(monkeypatch):
     configure("postgresql+psycopg://owner:secret@some.neon.tech/careerhunter_live")
     source, scratch = recovery._urls()
     assert source.endswith("/careerhunter_live")
-    assert scratch.endswith("/careerhunter_restore_probe_20261031")
+    assert scratch.endswith("/careerhunter_restore_probe_20261107")
     assert source != scratch
 
     for url in ("postgresql+psycopg://owner:secret@render.internal/careerhunter_live",
