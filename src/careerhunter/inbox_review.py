@@ -23,6 +23,12 @@ _CUT = re.compile(
     r"(?im)^(?:on .{1,160}wrote:|[- ]{2,}original message[- ]{2,}|from:\s.{2,150}$)"
 )
 _SIGNALS = (
+    ("application", re.compile(
+        r"\b(?:application received|we (?:have )?received your application|"
+        r"thank you for applying|başvurunuz alınmıştır|başvurunuzu aldık)\b", re.I)),
+    ("followup", re.compile(
+        r"\b(?:following up on your application|checking in regarding your application|"
+        r"başvurunuzla ilgili güncelleme|başvurunuzun durumu hakkında)\b", re.I)),
     ("interview", re.compile(r"\b(?:interview invitation|schedule (?:an?|your) interview|"
                               r"interview availability|mülakat daveti|görüşmeye davet)\b", re.I)),
     ("assessment", re.compile(r"\b(?:coding assessment|take.home assessment|technical test|"
