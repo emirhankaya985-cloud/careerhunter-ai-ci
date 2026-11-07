@@ -13,7 +13,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.engine import Connection, make_url
 
-from .database import jobs, metadata, runs
+from .database import metadata, runs
 from .pg_transfer import _check_urls, _fingerprint, _row_digest, _source_counts, _start_snapshot
 
 
