@@ -18,6 +18,31 @@ MAIL_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
 _ID = re.compile(r"^[A-Za-z0-9_-]{5,80}$")
 
 
+class GmailReadError(RuntimeError):
+    """A fixed diagnostic code; never includes OAuth or mail response bodies."""
+
+    def __init__(self, reason: str):
+        self.reason = reason
+        super().__init__(f"Gmail readonly unavailable: {reason}")
+
+
+def _safe_status_reason(exc: httpx.HTTPStatusError) -> str:
+    status = exc.response.status_code
+    if exc.request.url.host == "oauth2.googleapis.com":
+        if status in {400, 401, 403}:
+            return "oauth_exchange_rejected"
+        if status == 429:
+            return "oauth_rate_limited"
+        return "oauth_provider_unavailable" if status >= 500 else "oauth_http_error"
+    if status == 401:
+        return "gmail_token_rejected"
+    if status == 403:
+        return "gmail_access_forbidden"
+    if status == 429:
+        return "gmail_rate_limited"
+    return "gmail_provider_unavailable" if status >= 500 else "gmail_http_error"
+
+
 @dataclass(frozen=True)
 class InboxSummary:
     scanned: int
@@ -75,9 +100,13 @@ def read_readonly(*, max_results: int = 20, client: httpx.Client | None = None) 
                 raise RuntimeError("Gmail message list is invalid")
             signals: list[InboxSignal] = []
             seen = set()
+            seen_message_ids = set()
             for record in candidates:
                 if not isinstance(record, dict) or not _ID.fullmatch(str(record.get("id", ""))):
                     raise RuntimeError("Gmail message identifier is invalid")
+                if record["id"] in seen_message_ids:
+                    continue
+                seen_message_ids.add(record["id"])
                 raw_message = http.get(MAIL_URL + "/" + record["id"],
                                        headers=headers, params={"format": "raw"})
                 raw_message.raise_for_status()
@@ -93,6 +122,9 @@ def read_readonly(*, max_results: int = 20, client: httpx.Client | None = None) 
                     seen.add(signal.id_hash)
                     signals.append(signal)
             return summarize(signals)
+    except httpx.HTTPStatusError as exc:
+        # Only fixed codes based on endpoint and HTTP status; never API response bodies.
+        raise GmailReadError(_safe_status_reason(exc)) from None
     except (httpx.HTTPError, ValueError, TypeError, KeyError, UnicodeError, binascii.Error):
         # Never print API exceptions, tokens, senders or raw message bodies.
-        raise RuntimeError("Gmail readonly fetch failed") from None
+        raise GmailReadError("transport_or_content") from None
