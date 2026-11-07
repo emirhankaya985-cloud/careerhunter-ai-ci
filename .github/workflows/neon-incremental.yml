@@ -1,0 +1,52 @@
+name: CareerHunter Neon Incremental Sync (manual and guarded)
+
+# Never scheduled: source/target backup comparison requires owner review.
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Attempt non-cutover sync only if server-side gates allow it"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: careerhunter-production-collector
+  cancel-in-progress: false
+
+jobs:
+  incremental:
+    if: github.repository == 'emirhankaya985-cloud/careerhunter-ai-ci' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Preflight and owner-authorized incremental copy
+        env:
+          APPLY_REQUESTED: ${{ inputs.apply }}
+        run: |
+          PYTHONPATH=src python - <<'PY'
+          import json
+          import os
+          from careerhunter.render_scan_client import call, wait_ready
+          wait_ready()
+          plan = call("/internal/neon-incremental/plan")
+          print("Read-only preflight:", json.dumps(plan, sort_keys=True))
+          if plan.get("status") != "ready" or plan.get("production_cutover_performed") is not False:
+              raise SystemExit("FAIL: no verified read-only preflight")
+          if os.environ.get("APPLY_REQUESTED") != "true":
+              print("PASS: plan-only; no source/target writes")
+          else:
+              report = call("/internal/neon-incremental/apply", method="POST")
+              if (report.get("status") != "copied-and-verified"
+                      or report.get("source_modified") is not False
+                      or report.get("production_cutover_performed") is not False):
+                  raise SystemExit("FAIL: incremental copy not independently verified")
+              print("PASS: non-cutover copy verified. Final reconciliation still required.")
+          PY
