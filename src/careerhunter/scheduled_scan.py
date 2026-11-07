@@ -455,6 +455,20 @@ def telegram_digest(request: Request) -> dict[str, object]:
         and j.eligibility_status != "ineligible"
         and j.experience_level != "senior"
     )
+    # Evidence-based country signals, not work-authorization conclusions.
+    # A listing can name multiple countries, so buckets need not sum to jobs_new.
+    from types import SimpleNamespace
+    from .reporting.countries import classify_job_countries
+    code_for = {
+        "United States": "US", "United Kingdom": "GB",
+        "Australia": "AU", "Türkiye": "TR",
+    }
+    country_counts = dict.fromkeys(code_for.values(), 0)
+    for job in new_jobs.values():
+        # Descriptions often say "contact us", which is not evidence of US location.
+        location_only = SimpleNamespace(location=job.location, description="")
+        for country in classify_job_countries(location_only):
+            country_counts[code_for[country]] += 1
     items = [{
         "title": job.title[:90],
         "company": job.company[:70],
@@ -473,6 +487,7 @@ def telegram_digest(request: Request) -> dict[str, object]:
         "listed_count": len(ordered),
         "quality_rejected": len(new_jobs) - len(ordered),
         "quality_reasons": discarded,
+        "country_signals": country_counts,
         "threshold": threshold,
         "items": items,
     }
