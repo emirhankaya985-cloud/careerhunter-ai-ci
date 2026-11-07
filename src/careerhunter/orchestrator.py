@@ -83,7 +83,19 @@ class Orchestrator:
                     jobs.extend(found)
                     if not dry_run:
                         stats.jobs_new += self.repo.upsert_jobs(found)
-                        stats.jobs_closed += self.repo.mark_closed(source_name, company["name"], {j.job_id for j in found})
+                        stats.jobs_closed += self.repo.mark_closed(
+                            source_name, company["name"], {j.job_id for j in found}
+                        )
+                        # Official Turkey boards moved from unrelated Greenhouse
+                        # tenants to Lever. Retire *only* the provably misattributed
+                        # old rows and only after that replacement Lever board
+                        # returned a successful source response.
+                        corrected = {"Insider": "insiderone", "Peak": "peakgames"}
+                        if (source_name == "lever"
+                                and corrected.get(company["name"]) == slug):
+                            stats.jobs_closed += self.repo.quarantine_legacy_board_mismatch(
+                                company["name"]
+                            )
                     successful += 1
                 except Exception as exc:
                     errors.append(f"{company['name']}/{source_name}: {exc}")

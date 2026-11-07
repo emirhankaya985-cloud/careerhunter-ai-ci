@@ -260,6 +260,44 @@ class DatabaseRepository:
                 ).values(status="closed", closed_at=now, payload=json.dumps(payload)))
             return len(missing)
 
+    def quarantine_legacy_board_mismatch(self, company: str) -> int:
+        """Soft-close only old ATS rows proven to belong to a *different* company.
+
+        Historical source/job IDs, first-seen and verification timestamps remain
+        intact for audit and Neon/Render reconciliation. No deletes, no broad
+        provider-wide closing, and no automatic reinterpretation of an old job
+        as a new company posting. Call only after the replacement official Lever
+        board has been fetched successfully.
+        """
+        known_wrong = {
+            "Insider": "https://www.businessinsider.com/work-at-business-insider%",
+            "Peak": "https://job-boards.greenhouse.io/peak/jobs/%",
+        }
+        if company not in known_wrong:
+            return 0
+        with self.engine.begin() as connection:
+            stale = connection.execute(
+                select(jobs.c.source, jobs.c.job_id, jobs.c.payload)
+                .where(
+                    jobs.c.source == "greenhouse",
+                    jobs.c.company == company,
+                    jobs.c.job_url.like(known_wrong[company]),
+                    jobs.c.closed_at.is_(None),
+                )
+            ).mappings().all()
+            timestamp = utc_now().isoformat()
+            for row in stale:
+                job = Job.model_validate_json(row["payload"])
+                job.status = "closed"
+                payload, digest = self._job_payload(job)
+                connection.execute(
+                    update(jobs)
+                    .where(jobs.c.source == row["source"], jobs.c.job_id == row["job_id"])
+                    .values(status="closed", closed_at=timestamp,
+                            payload=payload, content_hash=digest)
+                )
+            return len(stale)
+
     def list_jobs(self, active_only: bool = True, limit: int = 100) -> list[Job]:
         statement = select(jobs.c.payload).order_by(jobs.c.last_verified_at.desc()).limit(limit)
         if active_only:
