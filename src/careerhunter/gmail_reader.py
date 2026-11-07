@@ -30,6 +30,21 @@ def _safe_status_reason(exc: httpx.HTTPStatusError) -> str:
     status = exc.response.status_code
     if exc.request.url.host == "oauth2.googleapis.com":
         if status in {400, 401, 403}:
+            # OAuth error *codes* are allowlisted, never provider descriptions,
+            # tokens, response bodies or credential metadata. invalid_grant on
+            # a refresh exchange requires a new owner authorization.
+            error_code = None
+            if len(exc.response.content) <= 4096:
+                try:
+                    payload = exc.response.json()
+                    if isinstance(payload, dict):
+                        error_code = payload.get("error")
+                except (ValueError, TypeError):
+                    pass
+            if error_code == "invalid_grant":
+                return "oauth_refresh_invalid"
+            if error_code == "invalid_client":
+                return "oauth_client_rejected"
             return "oauth_exchange_rejected"
         if status == 429:
             return "oauth_rate_limited"
