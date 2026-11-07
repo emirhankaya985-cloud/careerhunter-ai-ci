@@ -18,7 +18,7 @@ def gmail_acceptance(request: Request) -> dict:
         request, workflow=WORKFLOW,
         events=frozenset({"push", "workflow_dispatch"}),
     )
-    from .gmail_reader import configured, read_readonly
+    from .gmail_reader import GmailReadError, configured, read_readonly
     if os.getenv("CAREERHUNTER_GMAIL_READONLY_ENABLED") != "true":
         return {"status": "disabled", "read_only": True}
     if not configured():
@@ -33,7 +33,10 @@ def gmail_acceptance(request: Request) -> dict:
             "messages_sent": 0,
             "messages_modified": 0,
         }
+    except GmailReadError as exc:
+        # Fixed, non-sensitive diagnostic code only; no provider text or credentials.
+        logger.warning("Gmail acceptance unavailable (%s)", exc.reason)
+        return {"status": "read_failed", "reason": exc.reason, "read_only": True}
     except Exception as exc:
-        # Never include OAuth, email subjects/bodies or Gmail API error text.
         logger.warning("Gmail acceptance unavailable (%s)", type(exc).__name__)
         return {"status": "read_failed", "read_only": True}
