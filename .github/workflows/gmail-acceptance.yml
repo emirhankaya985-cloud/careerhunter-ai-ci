@@ -7,6 +7,8 @@ on:
     branches: [main]
     paths:
       - .github/workflows/gmail-acceptance.yml
+      - src/careerhunter/gmail_acceptance.py
+      - src/careerhunter/gmail_reader.py
 
 permissions:
   contents: read
