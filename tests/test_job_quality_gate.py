@@ -114,7 +114,7 @@ def test_live_digest_can_show_one_good_job_without_all_the_bad_ones():
     assert len(rendered) == 1
     assert len(rendered[0][1]) == 1
     assert "Junior Python Developer" in rendered[0][0]
-    assert "İncelenecek: <b>1</b>" in rendered[0][0]
+    assert "Uygun fırsat: <b>1</b>" in rendered[0][0]
 
 
 def test_real_new_records_are_kept_separate_from_quality_eligible_alerts():
