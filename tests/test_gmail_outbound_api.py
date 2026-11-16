@@ -139,7 +139,6 @@ def test_unsafe_contact_or_do_not_contact_never_sends(
     # Simulate a personal contact explicitly marked do-not-contact:
     modified = contact.model_copy(update={"do_not_contact": True})
     from sqlalchemy import update as sql_update
-    import json
     from careerhunter.database import contacts
     with repo.engine.begin() as conn:
         conn.execute(sql_update(contacts).where(
