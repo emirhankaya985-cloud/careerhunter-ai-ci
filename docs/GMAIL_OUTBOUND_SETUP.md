@@ -23,3 +23,9 @@ This phase adds a tested, **disabled-by-default** sending primitive for verified
 5. Confirm Telegram reports and safe failure behavior before claiming fully autonomous operation.
 
 No email is sent by this change.
+
+## Owner-only send endpoint
+
+The existing authenticated dashboard now exposes `GET /internal/owner/mail/status`, `GET /internal/owner/mail/csrf`, and `POST /internal/owner/mail/send`. The latter requires a logged-in owner, same-origin request, dedicated CSRF, explicit approval, an existing active ATS job and a **previously approved high-confidence contact** belonging to the same employer. Email address and evidence are loaded from private CRM; callers cannot inject an arbitrary destination. Durable idempotency is stable per job/contact, even if message text changes. This is not a public open relay or a new dashboard.
+
+The form/API send is currently closed until Google grants a fresh `gmail.send` refresh token and a separate write-capable ledger database URL `CAREERHUNTER_GMAIL_SEND_DATABASE_URL` is configured. The preexisting `GMAIL_READONLY_CLIENT_ID` and `GMAIL_READONLY_CLIENT_SECRET` may be reused as OAuth **client credentials**; only `GMAIL_SEND_REFRESH_TOKEN` must be new. Reusing `GMAIL_READONLY_REFRESH_TOKEN` is not permitted. Set `CAREERHUNTER_GMAIL_SEND_ENABLED=true` only after configuration and an owner-approved sample; unattended dispatch is not yet enabled. A Telegram audit/receipt check remains a production acceptance requirement.
