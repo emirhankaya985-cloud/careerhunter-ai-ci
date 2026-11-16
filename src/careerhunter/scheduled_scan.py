@@ -559,8 +559,9 @@ def gmail_review_summary(request: Request) -> dict[str, object]:
         return {"status": "disabled", "reason": "owner_opt_in_required"}
     if not configured():
         return {"status": "not_configured", "reason": "private_oauth_missing"}
-    if os.getenv("CAREERHUNTER_GMAIL_LEDGER_ENABLED") != "true":
-        return {"status": "ledger_disabled", "reason": "durable_dedupe_opt_in_required"}
-    # Preserve state across scheduled runs. No raw Gmail identifiers leave Render.
-    from .private_site import _settings
-    return read_readonly(max_results=20, ledger_url=_settings()[2]).as_dict()
+    # Read-only daily digest does not require a database write role.
+    # An owner may separately opt in to durable hash-only deduplication.
+    if os.getenv("CAREERHUNTER_GMAIL_LEDGER_ENABLED") == "true":
+        from .private_site import _settings
+        return read_readonly(max_results=20, ledger_url=_settings()[2]).as_dict()
+    return read_readonly(max_results=20).as_dict()

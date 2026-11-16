@@ -1,6 +1,7 @@
 name: CareerHunter Gmail Readonly Review
 
-# Disabled by default. Requires conscious activation after owner OAuth setup.
+# Owner explicitly enabled this daily, read-only Telegram digest on 2026-11-17.
+# Disable the workflow in GitHub Actions if monitoring should stop.
 on:
   workflow_dispatch:
   schedule:
@@ -16,7 +17,7 @@ concurrency:
 
 jobs:
   read_only_digest:
-    if: github.repository == 'emirhankaya985-cloud/careerhunter-ai-ci' && github.ref == 'refs/heads/main' && vars.CAREERHUNTER_GMAIL_REVIEW_ENABLED == 'true'
+    if: github.repository == 'emirhankaya985-cloud/careerhunter-ai-ci' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:

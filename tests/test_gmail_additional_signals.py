@@ -34,4 +34,4 @@ def test_private_report_labels_application_and_followup_aggregates():
     })
     assert "Başvuru alındı" in rendered
     assert "Takip / başvuru" in rendered
-    assert "ilk kez sınıflandırılan" in rendered
+    assert "Son 24 saatte incelenen ileti" in rendered

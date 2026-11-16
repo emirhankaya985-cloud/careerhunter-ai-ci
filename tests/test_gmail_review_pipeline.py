@@ -53,13 +53,17 @@ def test_gmail_endpoint_requires_signed_exact_workflow(client, monkeypatch):
     monkeypatch.setattr(gmail_reader, "configured", lambda: False)
     assert c.get(path, headers=headers).json()["status"] == "not_configured"
     monkeypatch.setattr(gmail_reader, "configured", lambda: True)
-    assert c.get(path, headers=headers).json()["status"] == "ledger_disabled"
-    monkeypatch.setenv("CAREERHUNTER_GMAIL_LEDGER_ENABLED", "true")
-    monkeypatch.setattr(gmail_reader, "read_readonly",
-                        lambda max_results, ledger_url: InboxSummary(
-                            scanned=2, categories={"interview": 1, "needs_review": 1},
-                            review_required=2))
+    ledger_calls = []
+    def stub_read(max_results, ledger_url=None):
+        ledger_calls.append(ledger_url)
+        return InboxSummary(scanned=2, categories={"interview": 1, "needs_review": 1},
+                            review_required=2)
+    monkeypatch.setattr(gmail_reader, "read_readonly", stub_read)
     r = c.get(path, headers=headers)
+    assert r.json()["status"] == "ready" and ledger_calls == [None]
+    monkeypatch.setenv("CAREERHUNTER_GMAIL_LEDGER_ENABLED", "true")
+    r = c.get(path, headers=headers)
+    assert ledger_calls[-1] is not None
     assert r.status_code == 200 and r.json()["scanned"] == 2
     assert "gmail.com" not in r.text and "token" not in r.text
     assert "crm_statuses_changed" in r.text
