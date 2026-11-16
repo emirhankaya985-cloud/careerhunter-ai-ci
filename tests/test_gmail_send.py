@@ -132,7 +132,6 @@ def test_existing_oauth_client_can_be_reused_but_readonly_token_cannot(
 
     def reply(request):
         if request.url.host == "oauth2.googleapis.com":
-            data = dict(item.split("=", 1) for item in request.content.decode().split("&"))
             seen.append(request.content.decode())
             assert "refresh_token=new-send-refresh" in request.content.decode()
             assert "old-readonly-refresh" not in request.content.decode()
