@@ -27,7 +27,7 @@ def prepare(data: dict) -> str:
              "rejection": "Ret olasılığı", "needs_review": "Diğer / belirsiz"}
     result = [
         "📨 <b>CareerHunter AI | Gmail başvuru incelemesi</b>",
-        f"📬 Son 24 saatte ilk kez sınıflandırılan ileti: <b>{scanned}</b>",
+        f"📬 Son 24 saatte incelenen ileti: <b>{scanned}</b>",
     ]
     for code, label in names.items():
         try:
