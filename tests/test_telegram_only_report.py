@@ -23,7 +23,7 @@ def test_five_weak_jobs_go_to_telegram_not_site():
     batches = report.make_messages(data)
     assert len(batches) == 1
     message, buttons = batches[0]
-    assert "Taranan yeni ilan: <b>5</b>" in message
+    assert "Bulunan yeni kayıt: <b>5</b>" in message
     assert message.count("Düşük/orta uyum") == 5
     assert "&lt;1&gt;" in message
     assert "<1>" not in message
@@ -92,7 +92,7 @@ def test_default_daily_limit_prevents_message_flood(monkeypatch):
     assert len(batches) == 2
     assert sum(len(buttons) for _, buttons in batches) == 10
     assert "15 ek ilan" in batches[-1][0]
-    assert "İncelenecek: <b>25</b>" in batches[0][0]
+    assert "Uygun fırsat: <b>25</b>" in batches[0][0]
 
 
 def test_priority_jobs_come_before_ambiguous_high_scores(monkeypatch):
