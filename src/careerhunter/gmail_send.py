@@ -75,15 +75,24 @@ class ApprovedMail:
             raise GmailSendError("verified_contact_evidence_required")
 
     def key(self) -> str:
-        values = (self.approval_id, self.recipient.casefold(), self.subject,
-                  self.body, self.contact_evidence_url)
-        return hashlib.sha256("\0".join(values).encode("utf-8")).hexdigest()
+        # Stable approved job/contact identity; changing the text cannot
+        # send a second application to the same contact for the same job.
+        return hashlib.sha256(self.approval_id.encode("utf-8")).hexdigest()
+
+
+def _credentials() -> tuple[str, str, str]:
+    # Reuse the already-installed OAuth CLIENT credentials, not its readonly
+    # refresh token. Google still requires a new gmail.send consent.
+    client_id = (os.environ.get("GMAIL_SEND_CLIENT_ID", "").strip()
+                 or os.environ.get("GMAIL_READONLY_CLIENT_ID", "").strip())
+    client_secret = (os.environ.get("GMAIL_SEND_CLIENT_SECRET", "").strip()
+                     or os.environ.get("GMAIL_READONLY_CLIENT_SECRET", "").strip())
+    send_refresh = os.environ.get("GMAIL_SEND_REFRESH_TOKEN", "").strip()
+    return client_id, client_secret, send_refresh
 
 
 def _configured() -> bool:
-    keys = ("GMAIL_SEND_CLIENT_ID", "GMAIL_SEND_CLIENT_SECRET",
-            "GMAIL_SEND_REFRESH_TOKEN")
-    return all(os.environ.get(key, "").strip() for key in keys)
+    return all(_credentials())
 
 
 def _send(mail: ApprovedMail, client: httpx.Client | None = None) -> str:
@@ -97,10 +106,11 @@ def _send(mail: ApprovedMail, client: httpx.Client | None = None) -> str:
     )
     try:
         with ctx as http:
+            client_id, client_secret, refresh = _credentials()
             response = http.post(TOKEN_URL, data={
-                "client_id": os.environ["GMAIL_SEND_CLIENT_ID"],
-                "client_secret": os.environ["GMAIL_SEND_CLIENT_SECRET"],
-                "refresh_token": os.environ["GMAIL_SEND_REFRESH_TOKEN"],
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh,
                 "grant_type": "refresh_token",
             })
             response.raise_for_status()

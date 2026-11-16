@@ -109,3 +109,38 @@ def test_live_mode_requires_postgresql(tmp_path, monkeypatch):
     credentials(monkeypatch)
     with pytest.raises(GmailSendError, match="postgresql_ledger_required"):
         send_approved_once(BASE, database_url="sqlite:///" + str(tmp_path / "x.db"))
+
+
+def test_changing_mail_body_does_not_bypass_one_application_per_job_contact():
+    from dataclasses import replace
+    assert BASE.key() == replace(BASE, subject="Revised subject",
+                                 body="Updated text").key()
+    assert BASE.key() != replace(BASE, approval_id="candidate-job-002").key()
+
+
+def test_existing_oauth_client_can_be_reused_but_readonly_token_cannot(
+    tmp_path, monkeypatch,
+):
+    monkeypatch.setenv("CAREERHUNTER_GMAIL_SEND_ENABLED", "true")
+    monkeypatch.delenv("GMAIL_SEND_CLIENT_ID", raising=False)
+    monkeypatch.delenv("GMAIL_SEND_CLIENT_SECRET", raising=False)
+    monkeypatch.setenv("GMAIL_READONLY_CLIENT_ID", "same-client-id")
+    monkeypatch.setenv("GMAIL_READONLY_CLIENT_SECRET", "same-client-secret")
+    monkeypatch.setenv("GMAIL_READONLY_REFRESH_TOKEN", "old-readonly-refresh")
+    monkeypatch.setenv("GMAIL_SEND_REFRESH_TOKEN", "new-send-refresh")
+    seen = []
+
+    def reply(request):
+        if request.url.host == "oauth2.googleapis.com":
+            seen.append(request.content.decode())
+            assert "refresh_token=new-send-refresh" in request.content.decode()
+            assert "old-readonly-refresh" not in request.content.decode()
+            return httpx.Response(200, json={"access_token": "fake-token"})
+        return httpx.Response(200, json={"id": "providerMessage123"})
+
+    with httpx.Client(transport=httpx.MockTransport(reply)) as client:
+        assert send_approved_once(
+            BASE, database_url="sqlite:///" + str(tmp_path / "ledger.db"),
+            client=client, allow_sqlite_tests=True,
+        ) == "sent"
+    assert len(seen) == 1
