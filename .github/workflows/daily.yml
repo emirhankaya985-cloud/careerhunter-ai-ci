@@ -1,10 +1,11 @@
 name: Daily Career Intelligence
 
 # Scheduled job runner needs no Bot token and no PostgreSQL password.
+# 08:50 UTC is 11:50 in Europe/Istanbul (UTC+3).
 on:
   workflow_dispatch:
   schedule:
-    - cron: '17 6 * * *'
+    - cron: '50 8 * * *'
 
 permissions:
   contents: read
