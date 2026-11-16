@@ -1,5 +1,6 @@
 """Gmail-send contract: no outbound before explicit consent and safe dedup."""
 import base64
+import json
 from dataclasses import replace
 
 import httpx
@@ -66,7 +67,7 @@ def test_one_time_gmail_send_has_positive_receipt(tmp_path, monkeypatch):
             return httpx.Response(200, json={"access_token": "fake-test-token"})
         assert request.url.path.endswith("/messages/send")
         assert request.headers["Authorization"] == "Bearer fake-test-token"
-        encoded = request.content.decode("utf-8").split('"raw":"', 1)[1].split('"', 1)[0]
+        encoded = json.loads(request.content)["raw"]
         raw = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
         assert b"jobs@example.org" in raw
         assert b"Backend Python" in raw
