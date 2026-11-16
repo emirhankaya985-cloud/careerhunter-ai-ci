@@ -72,3 +72,13 @@ def test_v2_production_acceptance_is_manual_and_never_modifies_data():
     assert "/internal/followups/due" in content
     assert "/internal/gmail/review-summary" in content
     assert "NO CLAIM:" in content
+
+
+def test_gmail_readonly_acceptance_runs_after_oauth_code_changes():
+    target = ROOT / ".github/workflows/gmail-acceptance.yml"
+    content = target.read_text(encoding="utf-8")
+    assert "workflow_dispatch:" in content
+    assert "src/careerhunter/gmail_acceptance.py" in content
+    assert "src/careerhunter/gmail_reader.py" in content
+    assert "Gmail Readonly" in content and "messages_sent" in content
+    assert "messages_sent" in content and "messages_modified" in content
