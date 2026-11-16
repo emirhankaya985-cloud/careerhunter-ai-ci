@@ -1,13 +1,13 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_daily_scheduler_uses_github_oidc_instead_of_database_secrets():
     daily = (ROOT / ".github/workflows/daily.yml").read_text(encoding="utf-8")
     assert "workflow_dispatch:" in daily
-    assert "cron: '17 6 * * *'" in daily
+    assert "cron: '50 8 * * *'" in daily
+    assert daily.count("cron:") == 1
     assert "concurrency:" in daily
     assert "id-token: write" in daily
     assert "contents: read" in daily
@@ -15,6 +15,17 @@ def test_daily_scheduler_uses_github_oidc_instead_of_database_secrets():
     assert "secrets." not in daily
     assert "python src/careerhunter/render_scan_client.py" in daily
     assert "git push" not in daily
+
+
+def test_daily_workflows_have_one_expected_collector_schedule():
+    workflows = ROOT / ".github/workflows"
+    schedules = {}
+    for path in workflows.glob("*.yml"):
+        text = path.read_text(encoding="utf-8")
+        if "name: Daily Career Intelligence" in text:
+            schedules[path.name] = [line.strip() for line in text.splitlines()
+                                    if "cron:" in line]
+    assert schedules == {"daily.yml": ["- cron: '50 8 * * *'"]}
 
 
 def test_legacy_workflows_are_manual_only_without_collector_secrets():
@@ -29,13 +40,11 @@ def test_legacy_workflows_are_manual_only_without_collector_secrets():
 
 def test_no_linkedin_automation_module_exists():
     python_files = list((ROOT / "src").rglob("*.py"))
-    content = "\n".join(path.read_text(encoding="utf-8") for path in python_files)
+    content = "\\n".join(path.read_text(encoding="utf-8") for path in python_files)
     forbidden = ["linkedin_cookie", "send_connection_request",
                  "import selenium", "from selenium",
                  "import playwright", "from playwright"]
-    # Mentioning Playwright as a CV skill does not mean browser automation is enabled.
     assert not any(term in content.lower() for term in forbidden)
-
 
 
 def test_optional_gmail_and_followup_jobs_are_main_branch_oidc_only():
@@ -49,7 +58,6 @@ def test_optional_gmail_and_followup_jobs_are_main_branch_oidc_only():
     assert "DATABASE_URL" not in follow
     assert "telegram_mail_review" in mail
     assert "telegram_followups" in follow
-
 
 
 def test_v2_production_acceptance_is_manual_and_never_modifies_data():
