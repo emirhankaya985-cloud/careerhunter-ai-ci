@@ -145,7 +145,7 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
         batch = items[start:start + CHUNK_SIZE]
         lines = [
             "📬 <b>CareerHunter AI | Günlük yeni ilanlar</b>",
-            f"🆕 Taranan yeni ilan: <b>{total}</b> · 🔎 İncelenecek: <b>{listed}</b> · ⭐ {threshold}+ puan: <b>{strong}</b>",
+            f"🆕 Bulunan yeni kayıt: <b>{total}</b> · ✅ Uygun fırsat: <b>{listed}</b> · ⭐ {threshold}+ puan: <b>{strong}</b>",
             f"✅ Öncelikli (junior + konum sinyali): <b>{sum(_priority(j, threshold) for j in items)}</b> / paylaşılan {len(items)}",
             f"📦 Bölüm {part + 1}/{count}",
         ]
