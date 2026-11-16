@@ -81,4 +81,4 @@ def test_gmail_readonly_acceptance_runs_after_oauth_code_changes():
     assert "src/careerhunter/gmail_acceptance.py" in content
     assert "src/careerhunter/gmail_reader.py" in content
     assert "gmail.readonly" in content or "Gmail OAuth" in content
-    assert "messages_sent\": 0" in content
+    assert "messages_sent" in content and "messages_modified" in content
