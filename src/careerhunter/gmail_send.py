@@ -18,7 +18,7 @@ from email.message import EmailMessage
 from urllib.parse import urlsplit
 
 import httpx
-from sqlalchemy import Column, MetaData, String, Table, create_engine, func, select, update
+from sqlalchemy import Column, MetaData, String, Table, create_engine, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.engine import make_url
@@ -137,6 +137,10 @@ def send_approved_once(
     if not _configured():
         raise GmailSendError("gmail_send_oauth_missing")
     try:
+        if database_url.startswith("postgres://"):
+            database_url = "postgresql+psycopg://" + database_url[len("postgres://"):]
+        elif database_url.startswith("postgresql://"):
+            database_url = "postgresql+psycopg://" + database_url[len("postgresql://"):]
         parsed = make_url(database_url)
         backend = parsed.get_backend_name()
         if backend != "postgresql" and not (allow_sqlite_tests and backend == "sqlite"):
@@ -148,6 +152,9 @@ def send_approved_once(
             now = datetime.now(timezone.utc).isoformat()
             today = datetime.now(timezone.utc).date().isoformat()
             with engine.begin() as conn:
+                if backend == "postgresql":
+                    # Serialize daily quota checks among concurrent workers.
+                    conn.execute(text("SELECT pg_advisory_xact_lock(98520261117)"))
                 count = conn.execute(select(func.count()).select_from(mail_receipts).where(
                     mail_receipts.c.claimed_at >= today
                 )).scalar_one()
