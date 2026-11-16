@@ -34,6 +34,7 @@ from .cloud_backup import router as cloud_backup_router
 from .neon_reconcile import router as neon_reconcile_router
 from .neon_incremental_api import router as neon_incremental_router
 from .gmail_acceptance import router as gmail_acceptance_router
+from .gmail_outbound_api import router as gmail_outbound_router
 from .pg_restore_acceptance import router as pg_restore_acceptance_router
 from .oauth_information import router as oauth_information_router
 
@@ -271,6 +272,7 @@ app.include_router(cloud_backup_router)
 app.include_router(neon_reconcile_router)
 app.include_router(neon_incremental_router)
 app.include_router(gmail_acceptance_router)
+app.include_router(gmail_outbound_router)
 app.include_router(pg_restore_acceptance_router)
 app.include_router(oauth_information_router)
 
