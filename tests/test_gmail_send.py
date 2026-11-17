@@ -77,7 +77,7 @@ def test_one_time_gmail_send_has_positive_receipt(tmp_path, monkeypatch):
     db = "sqlite:///" + str(tmp_path / "ledger.db")
     with httpx.Client(transport=httpx.MockTransport(transport)) as client:
         assert send_approved_once(BASE, database_url=db, client=client,
-                                  allow_sqlite_tests=True) == "sent"
+                                  allow_sqlite_tests=True) == "providerMessage999"
         with pytest.raises(GmailSendError, match="duplicate_or_previous_attempt"):
             send_approved_once(BASE, database_url=db, client=client,
                                allow_sqlite_tests=True)
@@ -142,5 +142,5 @@ def test_existing_oauth_client_can_be_reused_but_readonly_token_cannot(
         assert send_approved_once(
             BASE, database_url="sqlite:///" + str(tmp_path / "ledger.db"),
             client=client, allow_sqlite_tests=True,
-        ) == "sent"
+        ) == "providerMessage123"
     assert len(seen) == 1
