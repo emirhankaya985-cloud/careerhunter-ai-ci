@@ -22,6 +22,32 @@ def test_ashby_respects_remote_boolean():
     assert job.remote_type == "remote"
 
 
+def test_ashby_skips_blank_title_without_losing_valid_postings(httpx_mock, caplog):
+    url = "https://api.ashbyhq.com/posting-api/job-board/acme"
+    httpx_mock.add_response(url=url, json={"jobs": [
+        {"id": "bad", "title": "", "jobUrl": "https://jobs.ashbyhq.com/acme/bad"},
+        {"id": "good", "title": "Engineer", "jobUrl": "https://jobs.ashbyhq.com/acme/good"},
+    ]})
+    jobs = AshbySource(retries=1).fetch("Acme", "acme")
+    assert [job.job_id for job in jobs] == ["good"]
+    assert "skipped 1 postings" in caplog.text
+
+
+def test_ashby_rejects_board_with_only_invalid_postings(httpx_mock):
+    from careerhunter.sources.base import SourceError
+
+    httpx_mock.add_response(
+        url="https://api.ashbyhq.com/posting-api/job-board/acme",
+        json={"jobs": [{"id": "bad", "title": ""}]},
+    )
+    try:
+        AshbySource(retries=1).fetch("Acme", "acme")
+    except SourceError as exc:
+        assert "no_valid_jobs" in str(exc)
+    else:
+        raise AssertionError("An invalid board must not close existing jobs")
+
+
 def test_empty_job_lists(httpx_mock):
     httpx_mock.add_response(url="https://api.lever.co/v0/postings/empty?mode=json", json=[])
     assert LeverSource(retries=1).fetch("Empty", "empty") == []
