@@ -91,18 +91,17 @@ def application_queue(request: Request) -> dict[str, object]:
     """Show evidence-backed candidates without claiming an external submission."""
     _require_owner(request)
     from .private_site import _repo
+    from .job_quality import is_remote_fit
 
     repo = _repo()
     candidates = [
         job for job in repo.list_jobs(active_only=True, limit=5000)
-        if (job.match_score or 0) >= 75
-        and job.eligibility_status != "ineligible"
-        and job.verification_status in {"ATS_LISTED", "EMPLOYER_CONFIRMED"}
+        if is_remote_fit(job, minimum=75)
     ]
     candidates.sort(key=lambda job: (job.match_score or 0, job.first_seen_at),
                     reverse=True)
     return {
-        "status": "awaiting_cv_and_submission_method",
+        "status": "remote_verified_shortlist",
         "external_applications_sent": 0,
         "total_candidates": len(candidates),
         "jobs": [{

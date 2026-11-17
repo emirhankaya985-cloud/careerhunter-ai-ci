@@ -396,7 +396,7 @@ def telegram_digest(request: Request) -> dict[str, object]:
     from .database import jobs as jobs_table, runs as runs_table
     from .models import Job
     from .private_site import _get_engine
-    from .job_quality import evaluate
+    from .job_quality import evaluate, is_remote_fit
 
     with _get_engine().connect() as connection:
         latest = connection.execute(
@@ -440,6 +440,10 @@ def telegram_digest(request: Request) -> dict[str, object]:
             "level": job.experience_level,
             "eligibility": job.eligibility_status,
         }
+        if not is_remote_fit(job, minimum=max(75, threshold)):
+            reason = "remote_or_turkey_eligibility_unverified"
+            discarded[reason] = discarded.get(reason, 0) + 1
+            continue
         permitted, reason = evaluate(meta, minimum=minimum)
         if permitted:
             selected.append(job)

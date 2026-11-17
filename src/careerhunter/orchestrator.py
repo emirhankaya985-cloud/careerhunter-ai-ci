@@ -14,7 +14,7 @@ from .personal_profile import load_match_profile
 from .database import DatabaseRepository, create_repository
 from .intelligence.company import build_company_signals
 from .intelligence.people import discover_public_contacts
-from .models import RunStats, utc_now
+from .models import Opportunity, RunStats, utc_now
 from .verification import attest_collected
 from .notifications.ntfy import publish_run
 from .notifications.telegram import publish_daily_digest, publish_failure
@@ -128,16 +128,57 @@ class Orchestrator:
             stats.llm_calls = budget.calls if budget else 0
             stats.llm_tokens = budget.tokens if budget else 0
             stats.llm_cost_usd = budget.cost_usd if budget else 0
+        archived = 0
+        if not dry_run:
+            archived = self._archive_remote_fit_jobs(jobs)
         # Capture only genuinely new records after database upsert mutates
         # existing jobs to "seen"; LLM may have enriched the same objects.
         if not dry_run:
             self._telegram_candidates = [job for job in jobs if job.status == "new"]
         content = render_jobs(jobs, stats)
+        if archived:
+            content += f"\n## Otomatik arşiv\n\n- Güçlü, Türkiye'den çalışmaya uygun uzaktan eşleşme: {archived}\n"
         if errors:
             content += "\n## Kaynak hataları\n\n" + "\n".join(f"- {e}" for e in errors) + "\n"
         timestamp = datetime.now(ZoneInfo("Europe/Istanbul")).strftime("%Y%m%d-%H%M%S")
         path = project_path("reports", f"jobs-{timestamp}.md")
         return stats, write_report(path, content)
+
+    def _archive_remote_fit_jobs(self, jobs) -> int:
+        """Save strong verified remote matches as discovered CRM opportunities."""
+        from .job_quality import is_remote_fit
+
+        try:
+            minimum = max(75, min(100, int(os.getenv("TELEGRAM_MIN_SCORE", "75"))))
+        except ValueError:
+            minimum = 75
+        saved = 0
+        for job in jobs:
+            if not is_remote_fit(job, minimum=minimum):
+                continue
+            opportunity_id = f"{job.source}:{job.job_id}"
+            existing = self.repo.get_opportunity(opportunity_id)
+            # Preserve any human-reviewed/application state and notes.
+            if existing and existing.status != "discovered":
+                continue
+            self.repo.upsert_opportunity(Opportunity(
+                opportunity_id=opportunity_id,
+                title=job.title,
+                company=job.company,
+                job_id=job.job_id,
+                job_url=job.job_url,
+                status="discovered",
+                fit_score=job.match_score,
+                notes=(existing.notes if existing else
+                       "Otomatik arşiv: uzaktan, Türkiye uygunluğu doğrulanmış, "
+                       f"güçlü profil eşleşmesi ({job.match_score}/100)."),
+                applied_at=existing.applied_at if existing else None,
+                cv_sha256=existing.cv_sha256 if existing else None,
+                submission_evidence_url=(existing.submission_evidence_url if existing else None),
+                updated_at=utc_now(),
+            ))
+            saved += 1
+        return saved
 
     def _network(self, dry_run: bool) -> Path:
         companies = load_yaml("companies.yaml").get("companies", [])

@@ -178,14 +178,14 @@ nav .links{display:flex;flex-wrap:wrap}.sidebarbottom,.tiny{display:none}main{pa
 {% if has_next %}<a class="pagebtn" href="/?view=jobs&q={{ query|urlencode }}&sort={{ sort }}&page={{ page+1 }}">Sonraki →</a>{% endif %}
 </div></section>
 {% elif view=='applications' %}
-<section class="panel"><h2>📋 Başvuru kayıtları</h2>
-<p class="muted">Bu panel salt okunurdur. “Başvuruldu” durumu yalnızca kullanıcı tarafından doğrulanmış manuel kayıtları gösterir; bu sistem üzerinden otomatik gönderim yapılmaz.</p>
+<section class="panel"><h2>📋 Uygun uzaktan ilan arşivi</h2>
+<p class="muted">Güçlü profil eşleşmesi, uzaktan çalışma ve Türkiye'den çalışma uygunluğu doğrulanmış ilanlar otomatik kaydedilir. Başvuruldu durumu yalnızca gerçek başvuru kullanıcı tarafından doğrulanınca işlenir.</p>
 <div class="tablewrap"><table><thead><tr><th>POZİSYON</th><th>ŞİRKET</th><th>DURUM</th><th>BAŞVURU TARİHİ</th><th>İLAN</th></tr></thead><tbody>
 {% for a in applications %}<tr><td><strong>{{ a.title }}</strong><div class="small muted">{{ a.opportunity_id }}</div></td><td>{{ a.company }}</td>
 <td><span class="tag">{{ a.status }}</span>{% if a.cv_sha256 %}<div class="small muted">CV özeti kayıtlı</div>{% endif %}</td>
 <td>{{ a.applied_at.strftime("%Y-%m-%d") if a.applied_at else "—" }}</td>
 <td>{% if a.job_url %}<a class="link" href="{{ a.job_url|safe_href }}" target="_blank" rel="noopener noreferrer">İlana git ↗</a>{% endif %}</td></tr>
-{% else %}<tr><td colspan="5" class="empty">Manuel başvuru henüz kaydedilmedi.</td></tr>{% endfor %}
+{% else %}<tr><td colspan="5" class="empty">Şu an bütün ölçütleri karşılayan arşivlenmiş ilan yok. Yeni ilan taramalarında otomatik kontrol edilecek.</td></tr>{% endfor %}
 </tbody></table></div></section>
 <section class="panel"><h2>⏰ Bekleyen takipler</h2>
 <div class="tablewrap"><table><thead><tr><th>SON TARİH</th><th>İLİŞKİLİ BAŞVURU</th><th>NOT</th></tr></thead><tbody>
