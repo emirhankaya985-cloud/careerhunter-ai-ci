@@ -295,6 +295,11 @@ def main() -> int:
     if "--diagnose" in args:
         return 0 if diagnose_connection() else 1
     if "--test" in args:
+        # GitHub re-runs keep the same run ID and increment this attempt.
+        # Do not send another live test message for a repeated attempt.
+        if os.getenv("GITHUB_RUN_ATTEMPT", "1") != "1":
+            print("SKIP: repeat workflow attempt; no duplicate Telegram test message")
+            return 0
         accepted = send(
             "✅ <b>CareerHunter AI bağlandı!</b>\n"
             "🎯 Kişisel kariyer fırsatların artık bu sohbete iletilebilir.\n"
