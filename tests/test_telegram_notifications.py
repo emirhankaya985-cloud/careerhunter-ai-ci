@@ -11,7 +11,9 @@ TOKEN = "123456789:" + "a" * 35
 CHAT = "123456789"
 
 
-def job(i, *, score=90, status="new", senior=False, eligibility="needs_review"):
+def job(i, *, score=90, status="new", senior=False, eligibility="needs_review",
+        remote_type="remote", turkey_eligibility="verified",
+        verification_status="ATS_LISTED"):
     return Job(
         job_id=str(i), source="greenhouse", company=f"ACME <{i}>",
         title="Junior Python & AI Developer",
@@ -20,8 +22,11 @@ def job(i, *, score=90, status="new", senior=False, eligibility="needs_review"):
         source_url="https://boards-api.greenhouse.io/v1/boards/example/jobs",
         match_score=score,
         status=status,
+        remote_type=remote_type,
+        turkey_eligibility=turkey_eligibility,
         experience_level="senior" if senior else "junior",
-        eligibility_status=eligibility,
+        eligibility_status="ineligible" if eligibility == "ineligible" else "eligible",
+        verification_status=verification_status,
         match_method="llm" if i % 2 else "rules",
     )
 
@@ -77,6 +82,11 @@ def test_already_seen_low_score_and_remote_block_are_silent(configured, httpx_mo
     assert not telegram.publish_daily_digest(
         stats(), [job(1, status="seen"), job(2, score=60),
                   job(3, eligibility="ineligible"), job(4, senior=True)])
+    assert not telegram.publish_daily_digest(stats(), [
+        job(12, remote_type="unknown"),
+        job(13, turkey_eligibility="unknown"),
+        job(14, verification_status="REVIEW_REQUIRED"),
+    ])
     assert not telegram.publish_daily_digest(stats(status="failed"), [job(5)])
     assert httpx_mock.get_requests() == []
 

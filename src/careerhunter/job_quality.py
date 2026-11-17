@@ -105,3 +105,22 @@ def evaluate(job: Mapping[str, object], *, minimum: int = 60) -> tuple[bool, str
         if not has_target_location and not (generic_remote and remote_only):
             return False, "outside_target_geography"
     return True, "potential_match"
+
+
+def is_remote_fit(job: object, *, minimum: int = 75) -> bool:
+    """Strict candidate gate for remote shortlist/archive and alerts.
+
+    A generic remote label is insufficient: the publisher must explicitly
+    permit work from Türkiye, the posting must still be active and listed on
+    an ATS, and the match must clear the strong-fit threshold.
+    """
+    return (
+        getattr(job, "remote_type", None) == "remote"
+        and getattr(job, "eligibility_status", None) == "eligible"
+        and getattr(job, "turkey_eligibility", None) == "verified"
+        and getattr(job, "verification_status", None)
+        in {"ATS_LISTED", "EMPLOYER_CONFIRMED"}
+        and getattr(job, "status", None) != "closed"
+        and getattr(job, "experience_level", None) != "senior"
+        and int(getattr(job, "match_score", 0) or 0) >= minimum
+    )

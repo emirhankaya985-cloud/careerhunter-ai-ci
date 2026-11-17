@@ -111,10 +111,11 @@ def _safe(value: object, limit: int = 100) -> str:
 
 
 def _get_relevant(jobs: Iterable[Job], *, minimum: int) -> list[Job]:
+    from ..job_quality import is_remote_fit
+
     found: dict[tuple[str, str], Job] = {}
     for job in jobs:
-        if (job.status != "new" or job.eligibility_status == "ineligible"
-                or job.experience_level == "senior" or (job.match_score or 0) < minimum):
+        if job.status != "new" or not is_remote_fit(job, minimum=minimum):
             continue
         found[(job.source, job.job_id)] = job
     return sorted(

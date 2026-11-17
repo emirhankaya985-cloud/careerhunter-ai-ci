@@ -300,8 +300,8 @@ def test_owner_only_application_and_evidence_views(private_client):
     assert response.status_code == 200
     assert "Junior Python Developer" in response.text
     assert "Check reply before reaching out" in response.text
-    assert "Başvurular ve takipler" in response.text
-    assert "salt okunurdur" in response.text
+    assert "Uygun uzaktan ilan arşivi" in response.text
+    assert "Başvuruldu durumu yalnızca gerçek başvuru kullanıcı tarafından doğrulanınca işlenir" in response.text
     page = client.get("/?view=jobs")
     assert "Henüz doğrulanmadı" in page.text
     assert "Başvurular ve Takipler" in page.text
