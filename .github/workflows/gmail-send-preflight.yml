@@ -1,0 +1,50 @@
+name: CareerHunter Gmail Send Capability Preflight
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 9 * * *'
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/gmail-send-preflight.yml
+      - src/careerhunter/gmail_send_preflight.py
+      - src/careerhunter/scheduled_scan.py
+      - src/careerhunter/private_site.py
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  preflight:
+    if: github.repository == 'emirhankaya985-cloud/careerhunter-ai-ci' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Check Render send capability without sending mail
+        run: |
+          PYTHONPATH=src python - <<'PY'
+          import json, time
+          from careerhunter.render_scan_client import call, wait_ready
+          wait_ready()
+          result = None
+          for attempt in range(8):
+              try:
+                  result = call('/internal/gmail/send-preflight')
+                  break
+              except RuntimeError as exc:
+                  if 'HTTP 404' not in str(exc) or attempt == 7:
+                      raise
+                  time.sleep(15)
+          print(json.dumps(result, sort_keys=True))
+          if result.get('messages_sent') != 0:
+              raise SystemExit('Unsafe preflight response')
+          if result.get('status') != 'ready':
+              print('Outbound remains blocked; no email was sent.')
+          else:
+              print('Send capability and an approved recipient are configured; automatic dispatch remains off.')
+          PY
