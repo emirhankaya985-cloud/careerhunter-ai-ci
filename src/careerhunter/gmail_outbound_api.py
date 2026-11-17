@@ -48,16 +48,28 @@ def _owner(request: Request) -> str:
 @router.get("/internal/owner/mail/status")
 def mail_status(request: Request) -> dict[str, object]:
     _owner(request)
+    from .private_site import _repo
+
+    approved_contacts = sum(
+        contact.status == "approved_by_user"
+        and contact.research_confidence == "high"
+        and bool(contact.email_public)
+        and bool(contact.primary_source_url)
+        and not contact.do_not_contact
+        for contact in _repo().list_contacts(limit=5000)
+    )
     return {
         "status": "ready" if (
             os.getenv("CAREERHUNTER_GMAIL_SEND_ENABLED") == "true"
             and os.getenv("GMAIL_SEND_REFRESH_TOKEN", "").strip()
             and os.getenv("CAREERHUNTER_GMAIL_SEND_DATABASE_URL", "").strip()
+            and approved_contacts > 0
         ) else "blocked",
         "read_only_mail_unchanged": True,
         "send_enabled": os.getenv("CAREERHUNTER_GMAIL_SEND_ENABLED") == "true",
         "send_oauth_present": bool(os.getenv("GMAIL_SEND_REFRESH_TOKEN", "").strip()),
         "receipt_writer_present": bool(os.getenv("CAREERHUNTER_GMAIL_SEND_DATABASE_URL", "").strip()),
+        "approved_contact_count": approved_contacts,
         "automatic_dispatch_enabled": False,
     }
 
@@ -126,6 +138,7 @@ async def send_approved_mail(request: Request) -> JSONResponse:
         recipient=contact.email_public, subject=data.subject, body=data.body,
         contact_evidence_url=str(contact.primary_source_url),
         approval_id=approval_id, approved_by_owner=True,
+        reply_to=os.getenv("CAREERHUNTER_APPLICATION_REPLY_TO", "").strip() or None,
     )
     try:
         result = await run_in_threadpool(send_approved_once, mail, database_url=writer)

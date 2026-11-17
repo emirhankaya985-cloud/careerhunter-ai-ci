@@ -86,6 +86,38 @@ def _writer_url() -> str:
     return db_url
 
 
+@router.get("/internal/owner/application-queue")
+def application_queue(request: Request) -> dict[str, object]:
+    """Show evidence-backed candidates without claiming an external submission."""
+    _require_owner(request)
+    from .private_site import _repo
+
+    repo = _repo()
+    candidates = [
+        job for job in repo.list_jobs(active_only=True, limit=5000)
+        if (job.match_score or 0) >= 75
+        and job.eligibility_status != "ineligible"
+        and job.verification_status in {"ATS_LISTED", "EMPLOYER_CONFIRMED"}
+    ]
+    candidates.sort(key=lambda job: (job.match_score or 0, job.first_seen_at),
+                    reverse=True)
+    return {
+        "status": "awaiting_cv_and_submission_method",
+        "external_applications_sent": 0,
+        "total_candidates": len(candidates),
+        "jobs": [{
+            "source": job.source,
+            "job_id": job.job_id,
+            "company": job.company,
+            "title": job.title,
+            "score": job.match_score,
+            "eligibility": job.eligibility_status,
+            "verification": job.verification_status,
+            "application_url": str(job.job_url),
+        } for job in candidates[:25]],
+    }
+
+
 @router.get("/internal/owner/application-csrf")
 def application_csrf(request: Request) -> dict[str, str]:
     _require_owner(request)
