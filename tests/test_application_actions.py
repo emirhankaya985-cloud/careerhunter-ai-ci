@@ -65,7 +65,9 @@ def test_application_queue_is_read_only_and_requires_evidence(owner_client):
     eligible = repo.get_job("ashby", "demo42")
     eligible.match_score = 87
     eligible.verification_status = "ATS_LISTED"
-    eligible.eligibility_status = "needs_review"
+    eligible.remote_type = "remote"
+    eligible.turkey_eligibility = "verified"
+    eligible.eligibility_status = "eligible"
     repo.upsert_jobs([eligible])
     response = client.get("/internal/owner/application-queue")
     assert response.status_code == 200

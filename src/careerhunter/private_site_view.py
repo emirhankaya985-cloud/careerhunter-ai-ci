@@ -179,7 +179,7 @@ nav .links{display:flex;flex-wrap:wrap}.sidebarbottom,.tiny{display:none}main{pa
 </div></section>
 {% elif view=='applications' %}
 <section class="panel"><h2>📋 Uygun uzaktan ilan arşivi</h2>
-<p class="muted">Güçlü profil eşleşmesi, uzaktan çalışma ve Türkiye'den çalışma uygunluğu doğrulanmış ilanlar otomatik kaydedilir. Başvuruldu durumu yalnızca gerçek başvuru kullanıcı tarafından doğrulanınca işlenir.</p>
+<p class="muted">Güçlü profil eşleşmesi, uzaktan çalışma ve Türkiye'den çalışma uygunluğu doğrulanmış ilanlar otomatik kaydedilir. Başvuru kayıtları salt okunurdur; Başvuruldu durumu yalnızca gerçek başvuru kullanıcı tarafından doğrulanınca işlenir.</p>
 <div class="tablewrap"><table><thead><tr><th>POZİSYON</th><th>ŞİRKET</th><th>DURUM</th><th>BAŞVURU TARİHİ</th><th>İLAN</th></tr></thead><tbody>
 {% for a in applications %}<tr><td><strong>{{ a.title }}</strong><div class="small muted">{{ a.opportunity_id }}</div></td><td>{{ a.company }}</td>
 <td><span class="tag">{{ a.status }}</span>{% if a.cv_sha256 %}<div class="small muted">CV özeti kayıtlı</div>{% endif %}</td>
