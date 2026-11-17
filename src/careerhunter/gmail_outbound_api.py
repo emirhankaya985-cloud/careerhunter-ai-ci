@@ -136,6 +136,7 @@ async def send_approved_mail(request: Request) -> JSONResponse:
         # All unconfirmed results require a manual provider outbox check.
         raise HTTPException(503, "Send not verified; review Gmail and receipt ledger") from None
     return JSONResponse({
-        "status": result, "provider_receipt_confirmed": True,
+        "status": "sent", "gmail_message_id": result,
+        "provider_receipt_confirmed": True,
         "recipient_address_disclosed": False, "application_status_changed": False,
     })

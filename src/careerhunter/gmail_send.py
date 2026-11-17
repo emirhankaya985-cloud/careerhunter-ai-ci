@@ -125,7 +125,7 @@ def _send(mail: ApprovedMail, client: httpx.Client | None = None) -> str:
             provider_id = result.json().get("id")
             if not isinstance(provider_id, str) or not GMAIL_MESSAGE_ID.fullmatch(provider_id):
                 raise GmailSendError("gmail_receipt_unconfirmed")
-            return hashlib.sha256(provider_id.encode("utf-8")).hexdigest()
+            return provider_id
     except GmailSendError:
         raise
     except (httpx.HTTPError, ValueError, KeyError, TypeError, OSError):
@@ -179,12 +179,13 @@ def send_approved_once(
                 )
                 if conn.execute(statement).rowcount != 1:
                     raise GmailSendError("duplicate_or_previous_attempt")
-            receipt_hash = _send(mail, client)
+            provider_id = _send(mail, client)
+            receipt_hash = hashlib.sha256(provider_id.encode("utf-8")).hexdigest()
             with engine.begin() as conn:
                 conn.execute(update(mail_receipts).where(
                     mail_receipts.c.mail_hash == key
                 ).values(status="sent", provider_receipt_hash=receipt_hash))
-            return "sent"
+            return provider_id
         finally:
             engine.dispose()
     except GmailSendError:
