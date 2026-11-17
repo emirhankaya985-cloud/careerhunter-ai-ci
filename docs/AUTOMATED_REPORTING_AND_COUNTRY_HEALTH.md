@@ -2,7 +2,7 @@
 
 ## Safe production schedules (UTC; Türkiye +3)
 
-- Daily collector: 06:17 UTC (09:17 TRT). GitHub OIDC -> protected Render collector.
+- Hourly collector: minute 00 UTC each hour. GitHub OIDC -> protected Render collector.
 - Recovery guard: 08:40 and 15:20 UTC (11:40, 18:20 TRT). At most one extra recovery.
 - Four-country public ATS source check: 08:55 UTC (11:55 TRT). Country codes US, GB, AU and TR; this is a source health check, NOT verification of the private database's country counts.
 - Private dashboard readiness: 07:30 UTC (10:30 TRT).

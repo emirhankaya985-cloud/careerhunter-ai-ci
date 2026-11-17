@@ -54,7 +54,8 @@ def test_ineligible_high_score_is_marked_as_unsuitable():
 def test_no_jobs_still_delivers_daily_health_confirmation():
     result = report.make_messages({"status": "ready", "jobs_new": 0, "items": []})
     assert len(result) == 1
-    assert "Bugün yeni ilan yok" in result[0][0]
+    assert "Bu taramada yeni ilan yok" in result[0][0]
+    assert "Bir sonraki tarama saat başında" in result[0][0]
     assert result[0][1] == []
 
 

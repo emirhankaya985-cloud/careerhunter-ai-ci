@@ -1,7 +1,7 @@
 name: CareerHunter Daily Recovery Guard
 
-# Independent safeguard: recovers one missed/failed daily scan at most once a day.
-# All times UTC. Normal collection is 06:17 UTC; guard runs after the window.
+# Independent safeguard: dispatches at most one recovery scan daily if collection is unhealthy.
+# Hourly collection is handled by Hourly Career Intelligence; checks are UTC.
 on:
   workflow_dispatch:
   schedule:

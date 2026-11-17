@@ -6,7 +6,7 @@ from careerhunter.models import Job
 from careerhunter.security.validation import validate_slug
 
 from .base import JobSource, SourceError
-from .common import clean_html, infer_remote, parse_datetime
+from .common import clean_html, infer_remote, parse_application_deadline, parse_datetime
 
 
 class AshbySource(JobSource):
@@ -47,4 +47,6 @@ class AshbySource(JobSource):
                    description=description, remote_type=remote,
                    employment_type=item.get("employmentType") or "unknown",
                    published_at=parse_datetime(item.get("publishedAt")),
+                   application_deadline=(parse_datetime(item.get("applicationDeadline"))
+                                         or parse_application_deadline(description)),
                    job_url=job_url, source_url=source_url)

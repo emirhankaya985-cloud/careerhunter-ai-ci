@@ -21,7 +21,7 @@ paid service, payment method, subscription, or external AI API is required.
 
 ## Telegram digest behavior
 
-- The authenticated daily scan remains the source of new postings.
+- The authenticated hourly scan remains the source of new postings.
 - The outgoing report distinguishes **scored / review candidates** from
   **priority** ones; "strong" score alone does not certify suitability.
 - A priority item needs (1) score above the daily threshold,
@@ -42,7 +42,7 @@ paid service, payment method, subscription, or external AI API is required.
 1. Review GitHub Tests and Controlled E2E for the merged commit.
 2. Confirm Render has deployed the newer commit before assuming new match
    scores exist in the database. Do not modify the legacy database manually.
-3. The next successful Daily Career Intelligence workflow should process
+3. The next successful Hourly Career Intelligence workflow should process
    ATS listings. Confirm its processed/new counts separately.
 4. Inspect CareerHunter Telegram Report: positive Bot API receipt required;
    count and link list reflect the daily cap and explain hidden extras.

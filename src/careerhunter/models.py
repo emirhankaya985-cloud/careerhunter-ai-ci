@@ -25,6 +25,7 @@ class Job(BaseModel):
     skills_required: list[str] = Field(default_factory=list)
     salary: str | None = None
     published_at: datetime | None = None
+    application_deadline: datetime | None = None
     first_seen_at: datetime = Field(default_factory=utc_now)
     last_verified_at: datetime = Field(default_factory=utc_now)
     job_url: HttpUrl

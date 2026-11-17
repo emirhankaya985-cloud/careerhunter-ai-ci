@@ -14,7 +14,7 @@ from .personal_profile import load_match_profile
 from .database import DatabaseRepository, create_repository
 from .intelligence.company import build_company_signals
 from .intelligence.people import discover_public_contacts
-from .models import Opportunity, RunStats, utc_now
+from .models import FollowUp, Opportunity, RunStats, utc_now
 from .verification import attest_collected
 from .notifications.ntfy import publish_run
 from .notifications.telegram import publish_daily_digest, publish_failure
@@ -153,6 +153,7 @@ class Orchestrator:
         except ValueError:
             minimum = 75
         saved = 0
+        followup_ids = {item.followup_id for item in self.repo.list_followups(limit=10000)}
         for job in jobs:
             if not is_remote_fit(job, minimum=minimum):
                 continue
@@ -177,6 +178,16 @@ class Orchestrator:
                 submission_evidence_url=(existing.submission_evidence_url if existing else None),
                 updated_at=utc_now(),
             ))
+            deadline_followup_id = f"application-deadline:{opportunity_id}"
+            if (job.application_deadline and job.application_deadline > utc_now()
+                    and deadline_followup_id not in followup_ids):
+                self.repo.upsert_followup(FollowUp(
+                    followup_id=deadline_followup_id,
+                    opportunity_id=opportunity_id,
+                    due_at=job.application_deadline,
+                    note="Son başvuru günü için Telegram hatırlatması",
+                ))
+                followup_ids.add(deadline_followup_id)
             saved += 1
         return saved
 

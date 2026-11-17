@@ -1,9 +1,9 @@
 name: CareerHunter Telegram Report
 
-# Runs after the secretless daily scan. Secrets never enter the scanning job.
+# Runs after each secretless hourly scan. Secrets never enter the scanning job.
 on:
   workflow_run:
-    workflows: ["Daily Career Intelligence"]
+    workflows: ["Hourly Career Intelligence"]
     types: [completed]
 
 permissions:

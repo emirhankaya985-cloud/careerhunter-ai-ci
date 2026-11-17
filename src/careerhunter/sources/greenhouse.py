@@ -4,7 +4,7 @@ from careerhunter.models import Job
 from careerhunter.security.validation import validate_slug
 
 from .base import JobSource
-from .common import clean_html, infer_remote, parse_datetime
+from .common import clean_html, infer_remote, parse_application_deadline, parse_datetime
 
 
 class GreenhouseSource(JobSource):
@@ -24,5 +24,7 @@ class GreenhouseSource(JobSource):
                    title=item["title"], location=location, description=description,
                    remote_type=infer_remote(location, description),
                    published_at=parse_datetime(item.get("updated_at")),
+                   application_deadline=(parse_datetime(item.get("applicationDeadline"))
+                                         or parse_application_deadline(description)),
                    job_url=item["absolute_url"], source_url=source_url)
 

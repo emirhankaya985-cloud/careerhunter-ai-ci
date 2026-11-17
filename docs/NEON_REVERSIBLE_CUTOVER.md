@@ -26,7 +26,7 @@ This document is not permission to delete or close the source Render PostgreSQL 
 8. From an independent GitHub runner, require real HTTPS `/readyz` 200 with response `ready`, `/versionz` matching the live release, private route authentication checks. Inspect the actual Neon database for recent scan writes and ensure Render counts do not change during the Neon-only scan.
 9. Trigger *one* actual `daily.yml` production scan and require `jobs_processed > 0`, persisted Neon `runs` increment and the normal Telegram workflow report. Check duplicates and unknown-source failures.
 10. Gmail: `gmail.readonly` in ChatGPT is **not** by itself the Render server OAuth configuration. Require an actual completed, non-skipped `gmail-review.yml` run, Render OAuth feature flag, valid refresh-token configuration and a successful aggregate Telegram notification. Do not claim it works based only on connected Gmail profile.
-11. On **any** failed release, scan, Gmail or credential check: set `CAREERHUNTER_DB_TARGET=render`, redeploy, verify source `/readyz` and smoke, and keep both databases intact. The Render source must remain available until every acceptance is proven, the retention window chosen and the next planned daily scan succeeds.
+11. On **any** failed release, scan, Gmail or credential check: set `CAREERHUNTER_DB_TARGET=render`, redeploy, verify source `/readyz` and smoke, and keep both databases intact. The Render source must remain available until every acceptance is proven, the retention window chosen and the next planned hourly scan succeeds.
 
 ## 0 TL constraints
 

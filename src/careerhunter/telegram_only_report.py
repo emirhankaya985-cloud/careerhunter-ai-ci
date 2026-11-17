@@ -121,7 +121,7 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
 
     if not items:
         lines = [
-            "📬 <b>CareerHunter AI | Günlük iş raporu</b>",
+            "📬 <b>CareerHunter AI | Saatlik iş raporu</b>",
             f"🆕 Bugün bulunan yeni ilan: <b>{total}</b>",
             "🎯 Ön elemeden geçen yeni ilan: <b>0</b>",
         ]
@@ -132,7 +132,7 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
                 "Alakasız iş linkleri gönderilmiyor."
             )
         else:
-            lines.append("Bugün yeni ilan yok. Sistem günlük taramasını tamamladı. ✅")
+            lines.append("Bu taramada yeni ilan yok. Bir sonraki tarama saat başında. ✅")
         if country_line := _country_line(payload):
             lines.append(country_line)
         if explanation := _quality_reasons(payload):
@@ -144,7 +144,7 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
         start = part * CHUNK_SIZE
         batch = items[start:start + CHUNK_SIZE]
         lines = [
-            "📬 <b>CareerHunter AI | Günlük yeni ilanlar</b>",
+            "📬 <b>CareerHunter AI | Saatlik ilan taraması</b>",
             f"🆕 Bulunan yeni kayıt: <b>{total}</b> · ✅ Uygun fırsat: <b>{listed}</b> · ⭐ {threshold}+ puan: <b>{strong}</b>",
             f"✅ Öncelikli (junior + konum sinyali): <b>{sum(_priority(j, threshold) for j in items)}</b> / paylaşılan {len(items)}",
             f"📦 Bölüm {part + 1}/{count}",
@@ -174,6 +174,7 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
                 f"<b>{offset}. {safe(job.get('title'))}</b>",
                 f"🏢 {safe(job.get('company'), 60)} · 📍 {safe(job.get('location'), 60)}",
                 f"🎯 {score}/100 · {badge}",
+                f"📅 Son başvuru günü: {safe(job.get('application_deadline') or 'İlanda açık tarih yok', 20)}",
                 eligibility,
                 "",
             ])

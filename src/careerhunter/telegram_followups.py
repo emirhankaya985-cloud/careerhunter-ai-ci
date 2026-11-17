@@ -39,7 +39,9 @@ def prepare(payload: dict) -> tuple[str, list[dict]] | None:
         if not isinstance(item, dict):
             raise ValueError("Invalid reminder item")
         text.append(f"{index}. <b>{_clean(item.get('title'), 85)}</b>")
-        text.append(f"🏢 {_clean(item.get('company'), 65)} · 📅 {_clean(item.get('due_at'), 12)}")
+        label = ("Son başvuru günü" if item.get("reminder_type") == "application_deadline"
+                 else "Başvuru takip günü")
+        text.append(f"🏢 {_clean(item.get('company'), 65)} · ⏰ {label}: {_clean(item.get('due_at'), 12)}")
         url = str(item.get("job_url") or "")
         if url.startswith("https://") and not any(c.isspace() for c in url):
             buttons.append({"text": f"🔗 {index}. İlana git", "url": url})

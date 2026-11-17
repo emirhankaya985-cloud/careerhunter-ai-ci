@@ -1,4 +1,5 @@
 from careerhunter.sources.ashby import AshbySource
+from careerhunter.sources.common import parse_application_deadline
 from careerhunter.sources.greenhouse import GreenhouseSource
 from careerhunter.sources.lever import LeverSource
 
@@ -20,6 +21,13 @@ def test_lever_normalizes_milliseconds():
 def test_ashby_respects_remote_boolean():
     job = AshbySource.normalize("Acme", {"id": "xyz", "title": "ML Engineer", "location": "Berlin", "isRemote": True, "descriptionPlain": "Models", "jobUrl": "https://jobs.ashbyhq.com/acme/xyz", "publishedAt": "2026-10-01T10:00:00Z"}, "https://api.ashbyhq.com/posting-api/job-board/acme")
     assert job.remote_type == "remote"
+
+
+def test_explicit_application_deadlines_are_parsed_but_ambiguous_dates_are_ignored():
+    assert parse_application_deadline("Apply by March 12, 2027") is not None
+    assert parse_application_deadline("Son başvuru tarihi: 25.11.2026") is not None
+    assert parse_application_deadline("Apply by 01/02/2027") is None
+    assert parse_application_deadline("Applications close soon") is None
 
 
 def test_ashby_skips_blank_title_without_losing_valid_postings(httpx_mock, caplog):
