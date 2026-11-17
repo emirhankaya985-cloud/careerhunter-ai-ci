@@ -4,7 +4,7 @@ from careerhunter.models import Job
 from careerhunter.security.validation import validate_slug
 
 from .base import JobSource
-from .common import clean_html, infer_remote, parse_datetime
+from .common import clean_html, infer_remote, parse_application_deadline, parse_datetime
 
 
 class LeverSource(JobSource):
@@ -26,5 +26,7 @@ class LeverSource(JobSource):
                    remote_type=infer_remote(location, description),
                    employment_type=categories.get("commitment") or "unknown",
                    published_at=parse_datetime(item.get("createdAt")),
+                   application_deadline=(parse_datetime(item.get("applicationDeadline"))
+                                         or parse_application_deadline(description)),
                    job_url=item.get("hostedUrl") or item.get("applyUrl"), source_url=source_url)
 

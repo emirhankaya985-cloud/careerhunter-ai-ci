@@ -483,6 +483,8 @@ def telegram_digest(request: Request) -> dict[str, object]:
         "method": job.match_method,
         "eligibility": job.eligibility_status,
         "level": job.experience_level,
+        "application_deadline": (job.application_deadline.date().isoformat()
+                                  if job.application_deadline else None),
     } for job in ordered[:200]]
     return {
         "status": "ready",
@@ -535,6 +537,11 @@ def due_followups(request: Request) -> dict[str, object]:
         opportunity = Opportunity.model_validate_json(raw_opportunity)
         if followup.due_at.astimezone(timezone.utc) > now:
             continue
+        if (followup.note == "Son başvuru günü için Telegram hatırlatması"
+                and followup.due_at.astimezone(timezone.utc).date() != now.date()):
+            # Deadline notice is for that calendar day only; application check-ins
+            # remain overdue until the owner resolves them.
+            continue
         if opportunity.status in {"closed", "rejected"}:
             continue
         # Only public job information, no original followup note or private person data.
@@ -543,6 +550,9 @@ def due_followups(request: Request) -> dict[str, object]:
             "company": opportunity.company[:70],
             "job_url": str(opportunity.job_url) if opportunity.job_url else None,
             "due_at": followup.due_at.astimezone(timezone.utc).date().isoformat(),
+            "reminder_type": ("application_deadline"
+                              if followup.note == "Son başvuru günü için Telegram hatırlatması"
+                              else "application_followup"),
         })
     return {"status": "ready", "due_count": len(due), "items": due[:10], "bounded": True}
 
