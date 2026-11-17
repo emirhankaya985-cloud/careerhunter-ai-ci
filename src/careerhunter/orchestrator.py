@@ -105,7 +105,7 @@ class Orchestrator:
             raise RuntimeError(f'All {attempted} ATS job sources failed; refusing false success')
         stats.jobs_processed = len(jobs)
         if errors:
-            stats.error = f'{len(errors)}/{attempted} ATS sources failed (partial result); see report'
+            stats.error = f'{len(errors)}/{attempted} ATS sources failed (partial result): ' + '; '.join(errors)
         if not dry_run:
             for signal in build_company_signals(jobs):
                 self.repo.upsert_company_signal(signal)
