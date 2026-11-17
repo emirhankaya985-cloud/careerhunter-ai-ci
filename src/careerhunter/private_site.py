@@ -35,6 +35,8 @@ from .neon_reconcile import router as neon_reconcile_router
 from .neon_incremental_api import router as neon_incremental_router
 from .gmail_acceptance import router as gmail_acceptance_router
 from .gmail_outbound_api import router as gmail_outbound_router
+from .cv_vault import router as cv_vault_router
+from .gmail_send_preflight import router as gmail_send_preflight_router
 from .pg_restore_acceptance import router as pg_restore_acceptance_router
 from .oauth_information import router as oauth_information_router
 
@@ -273,6 +275,8 @@ app.include_router(neon_reconcile_router)
 app.include_router(neon_incremental_router)
 app.include_router(gmail_acceptance_router)
 app.include_router(gmail_outbound_router)
+app.include_router(cv_vault_router)
+app.include_router(gmail_send_preflight_router)
 app.include_router(pg_restore_acceptance_router)
 app.include_router(oauth_information_router)
 

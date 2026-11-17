@@ -33,3 +33,16 @@ The owner can inspect `GET /internal/owner/application-queue` for high-scoring, 
 When the authenticated sender account differs from the address printed on the candidate's CV, set `CAREERHUNTER_APPLICATION_REPLY_TO` to the candidate's verified contact address. The Gmail account remains the actual sender; the Reply-To header directs replies to the CV address. The application form must use the same verified contact address. Do not set a forged From header.
 
 The form/API send is currently closed until Google grants a fresh `gmail.send` refresh token and a separate write-capable ledger database URL `CAREERHUNTER_GMAIL_SEND_DATABASE_URL` is configured. The preexisting `GMAIL_READONLY_CLIENT_ID` and `GMAIL_READONLY_CLIENT_SECRET` may be reused as OAuth **client credentials**; only `GMAIL_SEND_REFRESH_TOKEN` must be new. Reusing `GMAIL_READONLY_REFRESH_TOKEN` is not permitted. Set `CAREERHUNTER_GMAIL_SEND_ENABLED=true` only after configuration and an owner-approved sample; unattended dispatch is not yet enabled. A Telegram audit/receipt check remains a production acceptance requirement.
+
+## Encrypted owner CV vault
+
+The private dashboard exposes owner-authenticated GET /internal/owner/cv/status,
+GET /internal/owner/cv/csrf, PUT /internal/owner/cv/tr and PUT
+/internal/owner/cv/en (raw application/pdf body), owner-only PDF download routes,
+and CSRF-protected DELETE routes. Files are limited to 10 MiB and are
+encrypted with AES-256-GCM before insertion. Production reuses the existing private CRM PostgreSQL writer URL and requires a
+base64url-encoded, random 32-byte key in CAREERHUNTER_CV_VAULT_KEY; keep the
+key in Render secrets.
+Losing/changing the key makes stored PDFs unrecoverable. Rotate only with an
+explicit decrypt/re-encrypt migration and verified backup. The repository does
+not upload local CV files or contact employers automatically.
