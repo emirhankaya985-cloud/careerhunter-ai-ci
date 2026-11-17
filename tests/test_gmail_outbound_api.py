@@ -110,12 +110,15 @@ def test_only_private_approved_matching_contact_can_be_used(
 
     def fake_send(mail, *, database_url):
         sent.append((mail, database_url))
-        return "sent"
+        return "gmailMessage42"
 
     monkeypatch.setattr(outbound, "send_approved_once", fake_send)
     assert post(client, csrf, person_id="not-known").status_code == 422
     assert post(client, csrf, job_id="unknown").status_code == 404
-    assert post(client, csrf, person_id="recruiter42").status_code == 200
+    response = post(client, csrf, person_id="recruiter42")
+    assert response.status_code == 200
+    assert response.json()["gmail_message_id"] == "gmailMessage42"
+    assert response.json()["status"] == "sent"
     assert len(sent) == 1
     mail = sent[0][0]
     assert mail.recipient == "jobs@example.org"
