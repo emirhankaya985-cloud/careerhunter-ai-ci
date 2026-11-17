@@ -55,6 +55,24 @@ def test_unauthenticated_application_endpoints_do_not_disclose_data(owner_client
     client, _ = owner_client
     assert client.get("/internal/owner/application-csrf").status_code == 401
     assert _record(client, "not-a-real-token").status_code == 401
+    assert client.get("/internal/owner/application-queue").status_code == 401
+
+
+def test_application_queue_is_read_only_and_requires_evidence(owner_client):
+    client, db = owner_client
+    _auth(client)
+    repo = SQLiteRepository(db)
+    eligible = repo.get_job("ashby", "demo42")
+    eligible.match_score = 87
+    eligible.verification_status = "ATS_LISTED"
+    eligible.eligibility_status = "needs_review"
+    repo.upsert_jobs([eligible])
+    response = client.get("/internal/owner/application-queue")
+    assert response.status_code == 200
+    assert response.json()["total_candidates"] == 1
+    assert response.json()["jobs"][0]["job_id"] == "demo42"
+    assert response.json()["external_applications_sent"] == 0
+    assert repo.list_opportunities() == []
 
 
 def test_no_write_without_valid_csrf_origin_or_explicit_real_confirmation(owner_client):

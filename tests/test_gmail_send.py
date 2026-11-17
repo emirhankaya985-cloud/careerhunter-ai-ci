@@ -31,6 +31,7 @@ def test_unapproved_or_unverified_mail_never_sends(tmp_path, monkeypatch):
     for mail in (
         replace(BASE, approved_by_owner=False),
         replace(BASE, recipient="no-address"),
+        replace(BASE, reply_to="bad\nBcc: intruder@example.org"),
         replace(BASE, contact_evidence_url="http://example.org/unverified"),
         replace(BASE, subject="Hi\nBcc: intruder@example.org"),
     ):
@@ -82,6 +83,25 @@ def test_one_time_gmail_send_has_positive_receipt(tmp_path, monkeypatch):
             send_approved_once(BASE, database_url=db, client=client,
                                allow_sqlite_tests=True)
     assert len(sent) == 1
+
+
+def test_reply_to_uses_candidate_address_without_spoofing_sender(monkeypatch):
+    from careerhunter.gmail_send import _send
+
+    credentials(monkeypatch)
+    captured = []
+
+    def transport(request):
+        if request.url.host == "oauth2.googleapis.com":
+            return httpx.Response(200, json={"access_token": "fake-test-token"})
+        encoded = json.loads(request.content)["raw"]
+        captured.append(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
+        return httpx.Response(200, json={"id": "providerMessage999"})
+
+    with httpx.Client(transport=httpx.MockTransport(transport)) as client:
+        _send(replace(BASE, reply_to="candidate@example.org"), client)
+    assert b"Reply-To: candidate@example.org" in captured[0]
+    assert b"From:" not in captured[0]
 
 
 def test_ambiguous_provider_failure_cannot_retry(tmp_path, monkeypatch):

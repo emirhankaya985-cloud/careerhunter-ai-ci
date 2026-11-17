@@ -50,12 +50,15 @@ class ApprovedMail:
     contact_evidence_url: str
     approval_id: str
     approved_by_owner: bool
+    reply_to: str | None = None
 
     def validate(self) -> None:
         if self.approved_by_owner is not True:
             raise GmailSendError("owner_approval_required")
         if not isinstance(self.recipient, str) or not EMAIL.fullmatch(self.recipient):
             raise GmailSendError("invalid_recipient")
+        if self.reply_to is not None and not EMAIL.fullmatch(self.reply_to):
+            raise GmailSendError("invalid_reply_to")
         if not isinstance(self.subject, str) or not 1 <= len(self.subject.strip()) <= 160:
             raise GmailSendError("invalid_subject")
         if any(c in self.subject for c in "\r\n"):
@@ -99,6 +102,8 @@ def _send(mail: ApprovedMail, client: httpx.Client | None = None) -> str:
     msg = EmailMessage()
     msg["To"] = mail.recipient
     msg["Subject"] = mail.subject.strip()
+    if mail.reply_to:
+        msg["Reply-To"] = mail.reply_to
     msg.set_content(mail.body)
     encoded = base64.urlsafe_b64encode(msg.as_bytes()).decode("ascii").rstrip("=")
     ctx = nullcontext(client) if client is not None else httpx.Client(

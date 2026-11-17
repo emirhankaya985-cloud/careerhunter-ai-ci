@@ -76,12 +76,28 @@ def test_send_fails_closed_without_scope_or_ledger(owner_mail_client, monkeypatc
     status = client.get("/internal/owner/mail/status")
     assert status.status_code == 200
     assert status.json()["status"] == "blocked"
+    assert status.json()["approved_contact_count"] == 1
     assert status.json()["automatic_dispatch_enabled"] is False
     assert post(client, csrf).status_code == 503
     monkeypatch.setenv("CAREERHUNTER_GMAIL_SEND_ENABLED", "true")
     assert post(client, csrf).status_code == 503
     monkeypatch.setenv("GMAIL_SEND_REFRESH_TOKEN", "fake")
     assert post(client, csrf).status_code == 503
+
+
+def test_mail_status_does_not_claim_ready_without_approved_contacts(owner_mail_client,
+                                                                     monkeypatch):
+    client = owner_mail_client
+    auth(client)
+    monkeypatch.setenv("CAREERHUNTER_GMAIL_SEND_ENABLED", "true")
+    monkeypatch.setenv("GMAIL_SEND_REFRESH_TOKEN", "fake")
+    monkeypatch.setenv("CAREERHUNTER_GMAIL_SEND_DATABASE_URL", "postgresql://example")
+    monkeypatch.setattr("careerhunter.private_site._repo",
+                        lambda: type("EmptyRepo", (), {"list_contacts": lambda self, limit: []})())
+    status = client.get("/internal/owner/mail/status")
+    assert status.status_code == 200
+    assert status.json()["status"] == "blocked"
+    assert status.json()["approved_contact_count"] == 0
 
 
 def test_csrf_origin_explicit_approval_required(owner_mail_client, monkeypatch):
