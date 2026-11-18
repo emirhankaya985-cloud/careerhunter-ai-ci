@@ -215,12 +215,20 @@ async def prepare_job_email(request: Request) -> JSONResponse:
             f"I’m happy to provide my CV and any further details.\n\nBest regards")
     if candidate_name:
         body += f",\n{candidate_name}"
+    from .telegram_mail_approval import queue_owner_approval
+    try:
+        telegram_notified = await run_in_threadpool(
+            queue_owner_approval, contact=contact, job=job, subject=f"Interest in {job.title} at {job.company}", body=body
+        )
+    except Exception:
+        telegram_notified = False
     return JSONResponse({
         "status": "draft_ready", "recipient_name": contact.name,
         "recipient_address": contact.email_public, "contact_evidence_url": str(contact.primary_source_url),
         "job_title": job.title, "company": job.company, "job_url": str(job.job_url),
         "subject": f"Interest in {job.title} at {job.company}", "body": body,
         "matched_profile_skills": matched[:5],
+        "telegram_approval_notified": telegram_notified,
     })
 
 
