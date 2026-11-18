@@ -9,11 +9,10 @@ paid service, payment method, subscription, or external AI API is required.
 - New-grad, **Intern**, Internship, Junior and Graduate titles receive
   early-career points. Generic and senior roles must not be boosted merely
   because they mention Python or AI in a description.
-- Explicit `Remote Worldwide` ATS *location* can count toward the remote
-  location score even if the ATS omits a separate `remote_type` field.
-  A bare "Remote" is not proof that someone in Türkiye may work there.
-- Regional "US-only", "UK-only" or equivalent restrictions override
-  general remote/global wording. Work permit, sponsorship, and employment
+- Remote postings are considered across all countries; target-country lists
+  and work eligibility do not discard an otherwise relevant remote role.
+- Regional "US-only", "UK-only" or equivalent restrictions remain visible as
+  application-condition warnings. Work permit, sponsorship, and employment
   eligibility are never inferred as legally guaranteed.
 - This scoring improvement runs in the **Render-hosted collector**. The
   GitHub change alone is not proof that Render is already running the
@@ -24,9 +23,8 @@ paid service, payment method, subscription, or external AI API is required.
 - The authenticated hourly scan remains the source of new postings.
 - The outgoing report distinguishes **scored / review candidates** from
   **priority** ones; "strong" score alone does not certify suitability.
-- A priority item needs (1) score above the daily threshold,
-  (2) a junior/intern level, and (3) an eligible geographic signal.
-  Even then, individual legal, visa and employer conditions need checking.
+- A priority item needs a score above the threshold and a junior/intern level.
+  Work-region restrictions are shown separately for the applicant to check.
 - Send higher-confidence records first; report score and relevant
   uncertainties clearly. Low/moderate matches are explicitly labelled.
 - `TELEGRAM_DAILY_ITEM_LIMIT` is 10 by default and is clamped to 1..20.

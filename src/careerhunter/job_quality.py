@@ -78,8 +78,11 @@ def evaluate(job: Mapping[str, object], *, minimum: int = 60) -> tuple[bool, str
         return False, "low_score"
     if level == "senior" or _BLOCKED.search(title):
         return False, "senior_or_non_engineering"
-    if eligibility == "ineligible":
-        return False, "not_eligible"
+    is_remote = str(job.get("remote_type") or "").casefold() == "remote" or bool(_OPEN_REMOTE.search(location)) or bool(
+        re.search(r"\b(?:remote|work from home|distributed)\b", description, re.IGNORECASE)
+    )
+    if not is_remote:
+        return False, "not_remote"
     direct_role = bool(_TARGET.search(title))
     broad_software = bool(_GENERIC_SOFTWARE.search(title))
     if not direct_role and not broad_software:
@@ -88,36 +91,19 @@ def evaluate(job: Mapping[str, object], *, minimum: int = 60) -> tuple[bool, str
         tech_context = skills + " " + description
         if not _STACK.search(tech_context) and not _INTERNSHIP.search(title):
             return False, "generic_software_no_target_stack"
-    if (not location or location.lower() == "unknown") and eligibility != "eligible":
-        return False, "location_unknown"
-    if _RESTRICTED_REMOTE.search(location) and eligibility != "eligible":
-        return False, "region_restricted"
-    if eligibility != "eligible":
-        has_target_location = bool(_TARGET_LOCATION.search(location))
-        generic_remote = bool(_OPEN_REMOTE.search(location))
-        # "Remote, Taiwan" is not globally remote: explicit outside-country
-        # location cancels a generic remote label unless eligibility is proven.
-        chunks = re.split(r"[,;/|]", location.casefold())
-        remote_only = all(
-            bool(_OPEN_REMOTE.search(c)) or not c.strip()
-            for c in chunks
-        )
-        if not has_target_location and not (generic_remote and remote_only):
-            return False, "outside_target_geography"
+    # Report the region and work authorization as context; country restrictions
+    # must not hide relevant remote listings from an all-country search.
     return True, "potential_match"
 
 
 def is_remote_fit(job: object, *, minimum: int = 75) -> bool:
     """Strict candidate gate for remote shortlist/archive and alerts.
 
-    A generic remote label is insufficient: the publisher must explicitly
-    permit work from Türkiye, the posting must still be active and listed on
-    an ATS, and the match must clear the strong-fit threshold.
+    Remote postings are collected across all countries. Work eligibility is
+    reported separately and must not silently hide an otherwise relevant job.
     """
     return (
         getattr(job, "remote_type", None) == "remote"
-        and getattr(job, "eligibility_status", None) == "eligible"
-        and getattr(job, "turkey_eligibility", None) == "verified"
         and getattr(job, "verification_status", None)
         in {"ATS_LISTED", "EMPLOYER_CONFIRMED"}
         and getattr(job, "status", None) != "closed"

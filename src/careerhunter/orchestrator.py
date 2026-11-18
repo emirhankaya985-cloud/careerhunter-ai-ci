@@ -171,8 +171,8 @@ class Orchestrator:
                 status="discovered",
                 fit_score=job.match_score,
                 notes=(existing.notes if existing else
-                       "Otomatik arşiv: uzaktan, Türkiye uygunluğu doğrulanmış, "
-                       f"güçlü profil eşleşmesi ({job.match_score}/100)."),
+                       "Otomatik arşiv: güçlü profil eşleşmeli uzaktan ilan; ülke ve çalışma izni "
+                       f"koşullarını ayrıca kontrol et ({job.match_score}/100)."),
                 applied_at=existing.applied_at if existing else None,
                 cv_sha256=existing.cv_sha256 if existing else None,
                 submission_evidence_url=(existing.submission_evidence_url if existing else None),

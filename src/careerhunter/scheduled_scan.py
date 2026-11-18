@@ -434,6 +434,7 @@ def telegram_digest(request: Request) -> dict[str, object]:
     for job in new_jobs.values():
         meta = {
             "title": job.title, "location": job.location,
+            "remote_type": job.remote_type,
             "description": job.description[:12000],
             "skills": job.skills_required,
             "score": job.match_score or 0,
@@ -441,7 +442,7 @@ def telegram_digest(request: Request) -> dict[str, object]:
             "eligibility": job.eligibility_status,
         }
         if not is_remote_fit(job, minimum=max(75, threshold)):
-            reason = "remote_or_turkey_eligibility_unverified"
+            reason = "remote_or_match_requirements"
             discarded[reason] = discarded.get(reason, 0) + 1
             continue
         permitted, reason = evaluate(meta, minimum=minimum)
@@ -457,7 +458,6 @@ def telegram_digest(request: Request) -> dict[str, object]:
     strong = sum(
         1 for j in ordered
         if (j.match_score or 0) >= threshold
-        and j.eligibility_status != "ineligible"
         and j.experience_level != "senior"
     )
     # Evidence-based country signals, not work-authorization conclusions.

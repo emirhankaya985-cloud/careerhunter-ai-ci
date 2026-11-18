@@ -19,12 +19,9 @@ FILTER_REASON_LABELS = {
     "low_score": "Puan eşiğinin altında",
     "invalid_score": "Puan hesaplanamadı",
     "senior_or_non_engineering": "Senior / hedef alan dışı",
+    "not_remote": "Uzaktan çalışma değil",
     "not_target_role": "Hedef pozisyon değil",
-    "not_eligible": "Bölgesel uygunluk olumsuz",
     "generic_software_no_target_stack": "Hedef teknoloji bulunamadı",
-    "location_unknown": "Konum belirsiz",
-    "region_restricted": "Bölge kısıtlaması",
-    "outside_target_geography": "Hedef coğrafya dışında",
 }
 
 
@@ -79,10 +76,9 @@ def _score(job: dict) -> int:
 
 
 def _priority(job: dict, threshold: int) -> bool:
-    """High score alone is never proof of early-career or country eligibility."""
+    """Prioritize strong junior remote matches; report region limits separately."""
     return (_score(job) >= threshold
-            and job.get("level") == "junior"
-            and job.get("eligibility") == "eligible")
+            and job.get("level") == "junior")
 
 
 def _daily_limit() -> int:
@@ -146,7 +142,7 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
         lines = [
             "📬 <b>CareerHunter AI | Saatlik ilan taraması</b>",
             f"🆕 Bulunan yeni kayıt: <b>{total}</b> · ✅ Uygun fırsat: <b>{listed}</b> · ⭐ {threshold}+ puan: <b>{strong}</b>",
-            f"✅ Öncelikli (junior + konum sinyali): <b>{sum(_priority(j, threshold) for j in items)}</b> / paylaşılan {len(items)}",
+            f"✅ Öncelikli (junior + uzaktan eşleşme): <b>{sum(_priority(j, threshold) for j in items)}</b> / paylaşılan {len(items)}",
             f"📦 Bölüm {part + 1}/{count}",
         ]
         if part == 0 and (country_line := _country_line(payload)):
@@ -159,11 +155,11 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
             score = _score(job)
             ineligible = job.get("eligibility") == "ineligible"
             senior = job.get("level") == "senior"
-            badge = ("⛔ Uygun görünmüyor" if ineligible or senior else
+            badge = ("⛔ Uygun görünmüyor" if senior else
                      "✅ Öncelikli eşleşme" if _priority(job, threshold) else
                      "🔎 Yüksek puan; koşullar teyit edilmeli" if score >= threshold else
                      "ℹ️ Düşük/orta uyum")
-            eligibility = ("⛔ Türkiye'den uygun değil" if ineligible else
+            eligibility = ("🌍 İlan belirli ülkelerle sınırlı olabilir; başvuru koşullarını kontrol et" if ineligible else
                            "🟢 İlanda Türkiye/global konum sinyali var; şartları kontrol et" if
                            job.get("eligibility") == "eligible" else
                            "🌍 Türkiye'den çalışma: teyit gerekli")

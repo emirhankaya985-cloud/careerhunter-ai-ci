@@ -59,12 +59,17 @@ def test_non_junior_and_unrelated_positions_are_rejected(title):
     assert not evaluate(candidate(title))[0]
 
 
-def test_non_target_country_is_not_reported_without_global_eligibility():
-    assert not evaluate(candidate("Junior Python Developer", "Taiwan"))[0]
-    assert not evaluate(candidate("Junior Python Developer", "Remote, Singapore"))[0]
-    assert not evaluate(candidate("Junior Python Developer", "Munich, Germany"))[0]
-    assert evaluate(candidate("Junior Python Developer", "Munich, Germany",
-                              eligibility="eligible"))[0]
+def test_remote_roles_in_any_country_are_kept_for_review():
+    assert evaluate(candidate("Junior Python Developer", "Remote, Taiwan"))[0]
+    assert evaluate(candidate("Junior Python Developer", "Remote, Singapore"))[0]
+    assert evaluate(candidate("Junior Python Developer", "Remote, Munich, Germany"))[0]
+    assert evaluate(candidate("Junior Python Developer", "Remote, United States",
+                              eligibility="ineligible"))[0]
+
+
+def test_onsite_roles_outside_target_country_are_not_remote_matches():
+    assert evaluate(candidate("Junior Python Developer", "Taiwan"))[1] == "not_remote"
+    assert evaluate(candidate("Junior Python Developer", "Munich, Germany"))[1] == "not_remote"
 
 
 def test_python_stack_is_needed_for_generic_software_roles():
@@ -76,8 +81,8 @@ def test_python_stack_is_needed_for_generic_software_roles():
         skills=["Python"], description="Backend FastAPI APIs"))[0]
 
 
-def test_ineligible_or_below_minimum_is_rejected_even_if_title_matches():
-    assert not evaluate(candidate(
+def test_remote_region_warning_does_not_hide_job_but_low_score_does():
+    assert evaluate(candidate(
         "Junior Python Developer", eligibility="ineligible"))[0]
     assert not evaluate(candidate(
         "Junior Python Developer", score=20))[0]
