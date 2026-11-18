@@ -396,7 +396,7 @@ def telegram_digest(request: Request) -> dict[str, object]:
     from .database import jobs as jobs_table, runs as runs_table
     from .models import Job
     from .private_site import _get_engine
-    from .job_quality import evaluate, is_remote_fit
+    from .job_quality import classify_profile_fit, evaluate
 
     with _get_engine().connect() as connection:
         latest = connection.execute(
@@ -425,13 +425,16 @@ def telegram_digest(request: Request) -> dict[str, object]:
         job = Job.model_validate_json(raw)
         if job.status == "new":
             new_jobs[(job.source, job.job_id)] = job
-    try:
-        minimum = max(55, min(85, int(os.getenv("TELEGRAM_ROLE_GATE_MIN_SCORE", "60"))))
-    except ValueError:
-        minimum = 60
     selected = []
     discarded = {}
+    fit_counts = {"strong_match": 0, "review": 0, "not_suitable": 0}
     for job in new_jobs.values():
+        if job.remote_type != "remote":
+            discarded["not_remote"] = discarded.get("not_remote", 0) + 1
+            continue
+        if job.verification_status not in {"ATS_LISTED", "EMPLOYER_CONFIRMED"}:
+            discarded["listing_not_verified"] = discarded.get("listing_not_verified", 0) + 1
+            continue
         meta = {
             "title": job.title, "location": job.location,
             "remote_type": job.remote_type,
@@ -441,25 +444,19 @@ def telegram_digest(request: Request) -> dict[str, object]:
             "level": job.experience_level,
             "eligibility": job.eligibility_status,
         }
-        if not is_remote_fit(job, minimum=max(75, threshold)):
-            reason = "remote_or_match_requirements"
-            discarded[reason] = discarded.get(reason, 0) + 1
-            continue
-        permitted, reason = evaluate(meta, minimum=minimum)
-        if permitted:
-            selected.append(job)
-        else:
-            discarded[reason] = discarded.get(reason, 0) + 1
+        match_status, match_reason = classify_profile_fit(meta, strong_minimum=threshold)
+        fit_counts[match_status] += 1
+        selected.append((job, match_status, match_reason))
     ordered = sorted(
         selected,
-        key=lambda j: ((j.match_score or 0), j.match_method == "llm"),
+        key=lambda item: (
+            {"strong_match": 2, "review": 1, "not_suitable": 0}[item[1]],
+            item[0].match_score or 0,
+            item[0].match_method == "llm",
+        ),
         reverse=True,
     )
-    strong = sum(
-        1 for j in ordered
-        if (j.match_score or 0) >= threshold
-        and j.experience_level != "senior"
-    )
+    strong = fit_counts["strong_match"]
     # Evidence-based country signals, not work-authorization conclusions.
     # A listing can name multiple countries, so buckets need not sum to jobs_new.
     from types import SimpleNamespace
@@ -485,7 +482,10 @@ def telegram_digest(request: Request) -> dict[str, object]:
         "level": job.experience_level,
         "application_deadline": (job.application_deadline.date().isoformat()
                                   if job.application_deadline else None),
-    } for job in ordered[:200]]
+        "fit_status": fit_status,
+        "fit_reason": fit_reason,
+        "matched_skills": job.skills_required[:8],
+    } for job, fit_status, fit_reason in ordered[:200]]
     return {
         "status": "ready",
         "run_id": int(latest["id"]),
@@ -494,6 +494,7 @@ def telegram_digest(request: Request) -> dict[str, object]:
         "listed_count": len(ordered),
         "quality_rejected": len(new_jobs) - len(ordered),
         "quality_reasons": discarded,
+        "fit_counts": fit_counts,
         "country_signals": country_counts,
         "threshold": threshold,
         "items": items,

@@ -11,6 +11,9 @@ paid service, payment method, subscription, or external AI API is required.
   because they mention Python or AI in a description.
 - Remote postings are considered across all countries; target-country lists
   and work eligibility do not discard an otherwise relevant remote role.
+- Every verified new remote posting receives a profile-fit label, matched
+  skills, a short reason, and a separate work-region warning. Low-fit roles
+  stay visible with their classification instead of disappearing silently.
 - Regional "US-only", "UK-only" or equivalent restrictions remain visible as
   application-condition warnings. Work permit, sponsorship, and employment
   eligibility are never inferred as legally guaranteed.

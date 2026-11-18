@@ -97,7 +97,7 @@ def test_zero_good_jobs_message_reports_filtered_count_without_wrong_links():
     assert len(results) == 1
     text, buttons = results[0]
     assert "5" in text and "Ön elemeden geçen yeni ilan: <b>0</b>" in text
-    assert "filtrelendi" in text
+    assert "rapor dışında kaldı" in text
     assert buttons == []
 
 
@@ -119,7 +119,7 @@ def test_live_digest_can_show_one_good_job_without_all_the_bad_ones():
     assert len(rendered) == 1
     assert len(rendered[0][1]) == 1
     assert "Junior Python Developer" in rendered[0][0]
-    assert "Uygun fırsat: <b>1</b>" in rendered[0][0]
+    assert "Doğrulanmış uzaktan ilan: <b>1</b>" in rendered[0][0]
 
 
 def test_real_new_records_are_kept_separate_from_quality_eligible_alerts():
@@ -138,8 +138,7 @@ def test_real_new_records_are_kept_separate_from_quality_eligible_alerts():
         }],
     }
     message, buttons = make_messages(payload)[0]
-    assert "Bulunan yeni kayıt: <b>9</b>" in message
-    assert "Uygun fırsat: <b>1</b>" in message
-    assert "8" in message and "filtre" in message.lower()
+    assert "Yeni ilan: <b>9</b>" in message
+    assert "Doğrulanmış uzaktan ilan: <b>1</b>" in message
     assert len(buttons) == 1
 

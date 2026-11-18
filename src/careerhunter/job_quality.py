@@ -95,6 +95,27 @@ def evaluate(job: Mapping[str, object], *, minimum: int = 60) -> tuple[bool, str
     return True, "potential_match"
 
 
+def classify_profile_fit(
+    job: Mapping[str, object], *, strong_minimum: int = 75, review_minimum: int = 55,
+) -> tuple[str, str]:
+    """Classify a remote listing against the candidate profile without hiding it."""
+    role_ok, reason = evaluate(job, minimum=0)
+    if not role_ok:
+        return "not_suitable", reason
+    try:
+        score = int(job.get("score") or 0)
+    except (TypeError, ValueError):
+        return "not_suitable", "invalid_score"
+    level = str(job.get("level") or "unknown").casefold()
+    if score >= strong_minimum and level == "junior":
+        return "strong_match", "Rol, beceri ve deneyim düzeyi güçlü eşleşiyor"
+    if score >= review_minimum and level != "senior":
+        return "review", "Kısmi eşleşme; ilan açıklamasını incele"
+    if level == "senior":
+        return "not_suitable", "Kıdem seviyesi hedef profilin üzerinde"
+    return "not_suitable", "Profil eşleşme puanı düşük"
+
+
 def is_remote_fit(job: object, *, minimum: int = 75) -> bool:
     """Strict candidate gate for remote shortlist/archive and alerts.
 
