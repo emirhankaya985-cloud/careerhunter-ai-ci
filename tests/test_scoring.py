@@ -10,10 +10,11 @@ def make_job(title="Junior Python Developer", description="Python SQL worldwide 
     return Job(job_id="1", source="greenhouse", company="Acme", title=title, description=description, location="Remote", remote_type="remote", job_url="https://boards.greenhouse.io/acme/jobs/1", source_url="https://boards-api.greenhouse.io/v1/boards/acme/jobs")
 
 
-def test_junior_worldwide_scores_and_verifies():
+def test_junior_worldwide_scores_and_requires_eligibility_review():
     job = RuleBasedMatcher(PROFILE, KEYWORDS).score(make_job())
     assert job.match_score >= 65
-    assert job.turkey_eligibility == "verified"
+    assert job.turkey_eligibility == "unknown"
+    assert job.eligibility_status == "needs_review"
 
 
 def test_us_only_remote_keeps_profile_score_and_exposes_region_limit():

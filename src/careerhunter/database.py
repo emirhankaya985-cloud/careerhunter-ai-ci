@@ -14,11 +14,12 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
-from .models import CompanySignal, Contact, FollowUp, Interaction, Job, Opportunity, RunStats, utc_now
+from .models import (CompanySignal, Contact, FollowUp, Interaction, Job, JobReview,
+                     Opportunity, RunStats, utc_now)
 from .reporting.countries import ALIASES, CITY_COUNTRY, COUNTRIES
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 metadata = MetaData()
 
 schema_versions = Table(
@@ -114,6 +115,14 @@ critic_results = Table(
     Column("person_id", String, nullable=False, index=True),
     Column("payload", Text, nullable=False),
     Column("observed_at", String, nullable=False),
+)
+job_reviews = Table(
+    "job_reviews", metadata,
+    Column("source", String, primary_key=True),
+    Column("job_id", String, primary_key=True),
+    Column("decision", String, nullable=False, index=True),
+    Column("updated_at", String, nullable=False),
+    Column("note", String(300)),
 )
 
 
@@ -243,6 +252,47 @@ class DatabaseRepository:
                 )
                 modified += result.rowcount or 0
         return modified
+
+    def set_job_review(self, review: JobReview) -> JobReview:
+        """Persist an owner decision without changing the listing lifecycle."""
+        with self.engine.begin() as connection:
+            if connection.execute(select(jobs.c.job_id).where(
+                jobs.c.source == review.source, jobs.c.job_id == review.job_id
+            )).first() is None:
+                raise KeyError("Job not found")
+            values = {
+                "decision": review.decision,
+                "updated_at": review.updated_at.isoformat(),
+                "note": review.note,
+            }
+            exists = connection.execute(select(job_reviews.c.source).where(
+                job_reviews.c.source == review.source,
+                job_reviews.c.job_id == review.job_id,
+            )).first()
+            if exists:
+                connection.execute(update(job_reviews).where(
+                    job_reviews.c.source == review.source,
+                    job_reviews.c.job_id == review.job_id,
+                ).values(**values))
+            else:
+                connection.execute(insert(job_reviews).values(
+                    source=review.source, job_id=review.job_id, **values
+                ))
+        return review
+
+    def list_job_reviews(self, keys: list[tuple[str, str]] | None = None,
+                         decision: str | None = None) -> list[JobReview]:
+        stmt = select(job_reviews)
+        if keys is not None:
+            if not keys:
+                return []
+            stmt = stmt.where(tuple_(job_reviews.c.source, job_reviews.c.job_id).in_(keys))
+        if decision:
+            stmt = stmt.where(job_reviews.c.decision == decision)
+        stmt = stmt.order_by(job_reviews.c.updated_at.desc())
+        with self.engine.connect() as connection:
+            rows = connection.execute(stmt).mappings().all()
+        return [JobReview.model_validate(dict(row)) for row in rows]
 
     def mark_closed(self, source: str, company: str, seen_ids: set[str]) -> int:
         """Close missing jobs only after the caller completed a successful source scan."""

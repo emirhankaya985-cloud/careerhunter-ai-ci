@@ -133,15 +133,50 @@ def test_intern_title_gets_junior_scoring_not_unknown_experience():
     assert intern.match_score >= 65
 
 
-def test_ats_remote_worldwide_location_counts_even_when_type_unknown():
+def test_ats_remote_worldwide_location_needs_turkey_eligibility_review():
     matcher = RuleBasedMatcher(sample(), {"junior": ["internship", "junior"]})
     role = example_job(
         title="Python Intern", description="Python FastAPI SQL trainee position."
     ).model_copy(update={"location": "Remote Worldwide", "remote_type": "unknown"})
     scored = matcher.score(role)
     assert scored.experience_level == "junior"
-    assert scored.eligibility_status == "eligible"
+    assert scored.eligibility_status == "needs_review"
+    assert scored.turkey_eligibility == "unknown"
     assert scored.match_score >= 75
+
+
+@pytest.mark.parametrize("scope", [
+    "Remote Worldwide",
+    "Remote, work from anywhere",
+    "Global remote",
+    "Remote from anywhere",
+    "Remote globally",
+])
+def test_global_remote_scope_is_a_review_match_not_turkey_eligibility(scope):
+    matcher = RuleBasedMatcher(sample(), {"junior": ["internship", "junior"]})
+    role = example_job(
+        title="Python Intern", description="Python FastAPI SQL trainee position."
+    ).model_copy(update={"location": scope, "remote_type": "unknown"})
+
+    scored = matcher.score(role)
+
+    assert scored.remote_type == "unknown"
+    assert scored.eligibility_status == "needs_review"
+    assert scored.turkey_eligibility == "unknown"
+    assert scored.match_score >= 65
+
+
+def test_explicit_remote_from_turkiye_can_be_verified():
+    matcher = RuleBasedMatcher(sample(), {"junior": ["internship", "junior"]})
+    role = example_job(
+        title="Python Intern",
+        description="Python FastAPI SQL trainee position. Remote from Türkiye.",
+    )
+
+    scored = matcher.score(role)
+
+    assert scored.eligibility_status == "eligible"
+    assert scored.turkey_eligibility == "verified"
 
 
 def test_remote_us_only_hyphen_overrides_any_worldwide_claim():

@@ -1,4 +1,4 @@
-"""Private, read-only CareerHunter site. Never publishes exports or writes CRM data.
+"""Private CareerHunter dashboard with a narrow owner-only job review writer.
 
 Start: uvicorn careerhunter.private_site:app --host 127.0.0.1 --port 8765
 Deployment needs DASHBOARD_DATABASE_URL (prefer a SELECT-only PostgreSQL user),
@@ -9,7 +9,6 @@ from __future__ import annotations
 import hmac
 import html
 import hashlib
-import asyncio
 import logging
 import os
 import time
@@ -17,17 +16,17 @@ from contextlib import asynccontextmanager
 from functools import lru_cache
 from urllib.parse import parse_qs
 
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from sqlalchemy import Integer, cast, create_engine, func, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import ArgumentError
+from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 
 from .database import DatabaseRepository, contacts, jobs, runs
-from .models import Job
+from .models import Job, JobReview, utc_now
 from .private_site_view import render_dashboard, render_login
 from .scheduled_scan import router as scan_router
 from .application_actions import router as application_router
@@ -36,7 +35,7 @@ from .neon_reconcile import router as neon_reconcile_router
 from .neon_incremental_api import router as neon_incremental_router
 from .gmail_acceptance import router as gmail_acceptance_router
 from .gmail_outbound_api import router as gmail_outbound_router
-from .telegram_mail_approval import router as telegram_mail_approval_router, register_telegram_webhook
+from .telegram_mail_approval import router as telegram_mail_approval_router
 from .cv_vault import router as cv_vault_router
 from .gmail_send_preflight import router as gmail_send_preflight_router
 from .pg_restore_acceptance import router as pg_restore_acceptance_router
@@ -248,6 +247,19 @@ def _panel_data(view: str, query: str, page: int, order: str = "fit") -> dict:
                                 query if view == "jobs" else "",
                                 limit=40 if view == "jobs" else 8,
                                 order=order if view == "jobs" else "recent") if view in {"jobs", "overview"} else ([], False)
+    review_states = {}
+    if view == "jobs":
+        try:
+            review_states = {
+                f"{review.source}:{review.job_id}": review.decision
+                for review in repo.list_job_reviews(
+                    [(job.source, job.job_id) for job in rows]
+                )
+            }
+        except SQLAlchemyError as exc:
+            # Older production schemas remain readable until the first signed-in
+            # owner decision creates this additive table through the CRM writer.
+            logger.info("Job review state is not migrated yet: %s", type(exc).__name__)
     return {
         "view": view,
         "heading": {"overview": "Kariyer kontrol merkezi", "jobs": "İş fırsatları",
@@ -268,7 +280,7 @@ def _panel_data(view: str, query: str, page: int, order: str = "fit") -> dict:
                      if view == "applications" else [],
         "latest": repo.latest_run() if view == "overview" else None,
         "job_rows": rows, "has_next": next_page, "page": page, "query": query,
-        "sort": order,
+        "sort": order, "job_review_states": review_states,
     }
 
 
@@ -276,13 +288,6 @@ def _panel_data(view: str, query: str, page: int, order: str = "fit") -> dict:
 async def lifespan(app: FastAPI):
     settings = _settings()  # Fail closed if secrets are absent.
     _bootstrap_fresh_schema_if_requested(settings[2])
-    if os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip():
-        try:
-            registered = await asyncio.to_thread(register_telegram_webhook)
-            if not registered:
-                logger.warning("Telegram mail-approval webhook was not registered")
-        except Exception:
-            logger.warning("Telegram mail-approval webhook setup failed")
     yield
     if _get_engine.cache_info().currsize:
         _get_engine().dispose()
@@ -305,6 +310,93 @@ app.include_router(cv_vault_router)
 app.include_router(gmail_send_preflight_router)
 app.include_router(pg_restore_acceptance_router)
 app.include_router(oauth_information_router)
+
+
+def _job_review_csrf_signer() -> URLSafeTimedSerializer:
+    return URLSafeTimedSerializer(_settings()[1], salt="careerhunter-owner-crm-csrf-v1")
+
+
+def _job_review_writer_url() -> str:
+    value = os.environ.get("CAREERHUNTER_CRM_DATABASE_URL", "").strip()
+    if not value:
+        raise HTTPException(503, "Job review writer is not configured")
+    if value.startswith("postgres://"):
+        value = "postgresql+psycopg://" + value[len("postgres://"):]
+    elif value.startswith("postgresql://"):
+        value = "postgresql+psycopg://" + value[len("postgresql://"):]
+    if value.startswith("sqlite:///"):
+        if (os.environ.get("CAREERHUNTER_CRM_SQLITE_TEST") != "true"
+                or os.environ.get("RENDER")):
+            raise HTTPException(503, "SQLite is permitted only in isolated tests")
+    elif not value.startswith("postgresql+psycopg://"):
+        raise HTTPException(503, "Unsupported job review writer")
+    return value
+
+
+def _check_job_review_csrf(request: Request) -> None:
+    parsed_origin = request.headers.get("origin", "")
+    from urllib.parse import urlsplit
+    origin = urlsplit(parsed_origin)
+    if (origin.scheme != "https" or origin.netloc != request.headers.get("host", "")
+            or origin.path not in ("", "/") or origin.query or origin.fragment):
+        raise HTTPException(403, "Invalid request origin")
+    token = request.headers.get("x-csrf-token", "")
+    cookie = request.cookies.get(_cookie_name(_settings()[3]), "")
+    binding = hashlib.sha256(cookie.encode("utf-8")).hexdigest()
+    try:
+        claims = _job_review_csrf_signer().loads(token, max_age=1200)
+    except (BadSignature, ValueError, TypeError):
+        raise HTTPException(403, "Invalid CSRF token") from None
+    if not isinstance(claims, dict) or not hmac.compare_digest(
+        str(claims.get("session", "")), binding
+    ):
+        raise HTTPException(403, "Invalid CSRF session")
+
+
+@app.get("/internal/owner/job-review/csrf")
+def job_review_csrf(request: Request) -> dict[str, str]:
+    if not _authenticated(request):
+        raise HTTPException(401, "Owner login required")
+    cookie = request.cookies.get(_cookie_name(_settings()[3]), "")
+    binding = hashlib.sha256(cookie.encode("utf-8")).hexdigest()
+    return {"csrf_token": _job_review_csrf_signer().dumps({"session": binding})}
+
+
+@app.post("/internal/owner/job-review")
+async def set_job_review(request: Request) -> JSONResponse:
+    if not _authenticated(request):
+        raise HTTPException(401, "Owner login required")
+    _check_job_review_csrf(request)
+    if request.headers.get("content-type", "").split(";")[0] != "application/json":
+        raise HTTPException(415, "JSON required")
+    payload = bytearray()
+    async for chunk in request.stream():
+        payload.extend(chunk)
+        if len(payload) > 2048:
+            raise HTTPException(413, "Request is too large")
+    try:
+        review = JobReview.model_validate_json(payload)
+    except (ValueError, TypeError):
+        raise HTTPException(422, "Invalid job review") from None
+    from sqlalchemy import create_engine
+    from .database import DatabaseRepository, job_reviews, metadata
+    engine = create_engine(_job_review_writer_url(), pool_pre_ping=True,
+                           pool_size=1, max_overflow=0)
+    try:
+        # Additive migration for this single table; the dashboard read engine
+        # remains read-only and never runs metadata creation.
+        metadata.create_all(engine, tables=[job_reviews])
+        repo = object.__new__(DatabaseRepository)
+        repo.engine = engine
+        review.updated_at = utc_now()
+        try:
+            saved = repo.set_job_review(review)
+        except KeyError:
+            raise HTTPException(404, "Job not found") from None
+        return JSONResponse({"status": "saved", "decision": saved.decision,
+                             "updated_at": saved.updated_at.isoformat()})
+    finally:
+        engine.dispose()
 
 
 @app.middleware("http")
