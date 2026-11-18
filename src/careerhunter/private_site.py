@@ -9,6 +9,7 @@ from __future__ import annotations
 import hmac
 import html
 import hashlib
+import asyncio
 import logging
 import os
 import time
@@ -35,6 +36,7 @@ from .neon_reconcile import router as neon_reconcile_router
 from .neon_incremental_api import router as neon_incremental_router
 from .gmail_acceptance import router as gmail_acceptance_router
 from .gmail_outbound_api import router as gmail_outbound_router
+from .telegram_mail_approval import router as telegram_mail_approval_router, register_telegram_webhook
 from .cv_vault import router as cv_vault_router
 from .gmail_send_preflight import router as gmail_send_preflight_router
 from .pg_restore_acceptance import router as pg_restore_acceptance_router
@@ -274,6 +276,13 @@ def _panel_data(view: str, query: str, page: int, order: str = "fit") -> dict:
 async def lifespan(app: FastAPI):
     settings = _settings()  # Fail closed if secrets are absent.
     _bootstrap_fresh_schema_if_requested(settings[2])
+    if os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip():
+        try:
+            registered = await asyncio.to_thread(register_telegram_webhook)
+            if not registered:
+                logger.warning("Telegram mail-approval webhook was not registered")
+        except Exception:
+            logger.warning("Telegram mail-approval webhook setup failed")
     yield
     if _get_engine.cache_info().currsize:
         _get_engine().dispose()
@@ -291,6 +300,7 @@ app.include_router(neon_reconcile_router)
 app.include_router(neon_incremental_router)
 app.include_router(gmail_acceptance_router)
 app.include_router(gmail_outbound_router)
+app.include_router(telegram_mail_approval_router)
 app.include_router(cv_vault_router)
 app.include_router(gmail_send_preflight_router)
 app.include_router(pg_restore_acceptance_router)
