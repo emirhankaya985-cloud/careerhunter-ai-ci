@@ -2,17 +2,14 @@
 from __future__ import annotations
 
 import hashlib
-import html
 import hmac
 import json
-import logging
 import os
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 
-import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import Column, MetaData, String, Table, Text, create_engine, insert, select, update
@@ -21,13 +18,11 @@ from starlette.concurrency import run_in_threadpool
 from .gmail_send import ApprovedMail, GmailSendError, send_approved_once
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
-_TOKEN_RE = re.compile(r"^[0-9]{6,15}:[A-Za-z0-9_-]{25,}$")
 _SECRET_RE = re.compile(r"^[A-Za-z0-9_-]{32,256}$")
 _CHAT_RE = re.compile(r"^-?[0-9]{4,20}$")
+_REQUEST_RE = re.compile(r"^[A-Za-z0-9_]{20,32}$")
 _SOURCES = frozenset({"ashby", "lever", "greenhouse"})
 _BASE_URL = "https://careerhunter-private-dashboard.onrender.com"
-_WEBHOOK_READY = False
 _metadata = MetaData()
 approval_requests = Table(
     "careerhunter_telegram_mail_approvals", _metadata,
@@ -40,14 +35,9 @@ approval_requests = Table(
 )
 
 
-def _telegram_config() -> tuple[str, str, str] | None:
-    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-    chat = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+def _webhook_secret() -> str | None:
     secret = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip()
-    if not (_TOKEN_RE.fullmatch(token) and _CHAT_RE.fullmatch(chat)
-            and _SECRET_RE.fullmatch(secret)):
-        return None
-    return token, chat, secret
+    return secret if _SECRET_RE.fullmatch(secret) else None
 
 
 def _writer_url() -> str:
@@ -61,62 +51,20 @@ def _writer_url() -> str:
     return url
 
 
-def _api(token: str, method: str, payload: dict) -> dict | None:
-    try:
-        response = httpx.post(
-            f"https://api.telegram.org/bot{token}/{method}", json=payload,
-            timeout=15, follow_redirects=False, trust_env=False,
-        )
-        if response.status_code != 200:
-            logger.warning("Telegram mail approval API rejected: %s", method)
-            return None
-        result = response.json()
-        return result if isinstance(result, dict) and result.get("ok") is True else None
-    except (httpx.HTTPError, ValueError, TypeError, OSError):
-        logger.warning("Telegram mail approval transport failed: %s", method)
-        return None
-
-
-def register_telegram_webhook() -> bool:
-    """Register only when no different webhook owns this bot."""
-    global _WEBHOOK_READY
-    config = _telegram_config()
-    if not config:
-        return False
-    token, _, secret = config
-    target = _BASE_URL + "/internal/telegram/mail-approval"
-    info = _api(token, "getWebhookInfo", {})
-    if info is None:
-        return False
-    current = str((info.get("result") or {}).get("url") or "")
-    if current and current != target:
-        logger.warning("Telegram webhook already belongs to another URL; left unchanged")
-        return False
-    result = _api(token, "setWebhook", {
-        "url": target, "secret_token": secret,
-        "allowed_updates": ["message", "callback_query"],
-        "drop_pending_updates": False,
-    })
-    if result is None:
-        return False
-    _WEBHOOK_READY = True
-    logger.info("Telegram owner approval webhook is registered")
-    return True
-
-
 def queue_owner_approval(*, contact, job, subject: str, body: str) -> bool:
-    """Persist the exact draft before showing it with a one-click approval button."""
-    config = _telegram_config()
-    if (not config or not _WEBHOOK_READY
-            or not _TOKEN_RE.fullmatch(os.getenv("TELEGRAM_BOT_TOKEN", "").strip())):
+    """Persist an exact draft; a secret-bearing GitHub worker delivers it."""
+    if not _webhook_secret():
         return False
-    token, chat, _ = config
     if len(body) > 2300 or not subject.strip():
         return False
     request_id = secrets.token_urlsafe(18).replace("-", "_")
     payload = {
         "person_id": contact.person_id, "source": job.source, "job_id": job.job_id,
         "subject": subject, "body": body,
+        "recipient_name": contact.name,
+        "recipient_address": contact.email_public,
+        "contact_evidence_url": str(contact.primary_source_url),
+        "company": job.company, "job_title": job.title, "job_url": str(job.job_url),
     }
     now = datetime.now(timezone.utc)
     engine = create_engine(_writer_url(), pool_pre_ping=True, pool_size=1, max_overflow=0)
@@ -125,62 +73,137 @@ def queue_owner_approval(*, contact, job, subject: str, body: str) -> bool:
         with engine.begin() as connection:
             connection.execute(insert(approval_requests).values(
                 request_id=request_id, created_at=now.isoformat(),
-                expires_at=(now + timedelta(hours=24)).isoformat(), status="pending",
+                expires_at=(now + timedelta(hours=24)).isoformat(), status="queued",
                 payload=json.dumps(payload, ensure_ascii=False),
                 recipient_hash=hashlib.sha256(contact.email_public.casefold().encode()).hexdigest(),
             ))
     finally:
         engine.dispose()
 
-    def safe(value: object) -> str:
-        return html.escape(str(value or ""), quote=True)
-    message = (
-        "✉️ <b>CareerHunter | E-posta onayı</b>\n\n"
-        f"<b>Alıcı:</b> {safe(contact.name)} &lt;{safe(contact.email_public)}&gt;\n"
-        f"<b>Şirket:</b> {safe(job.company)}\n"
-        f"<b>İlan:</b> <a href=\"{safe(job.job_url)}\">{safe(job.title)}</a>\n"
-        f"<b>Konu:</b> {safe(subject)}\n\n"
-        f"<b>Gönderilecek e-posta:</b>\n<pre>{safe(body)}</pre>\n"
-        "Göndermek için aşağıdaki düğmeye bas. Bu onay 24 saat geçerlidir."
-    )
-    callback_id = "chmail:" + request_id
-    result = _api(token, "sendMessage", {
-        "chat_id": chat, "text": message, "parse_mode": "HTML",
-        "link_preview_options": {"is_disabled": True}, "protect_content": True,
-        "reply_markup": {"inline_keyboard": [[
-            {"text": "🔎 Kaynak kanıtı", "url": str(contact.primary_source_url)},
-        ], [
-            {"text": "✅ Bu e-postayı gönder", "callback_data": callback_id},
-            {"text": "İptal", "callback_data": "chcancel:" + request_id},
-        ]]},
-    })
-    if result is None:
-        with engine.begin() as connection:
-            connection.execute(update(approval_requests).where(
-                approval_requests.c.request_id == request_id,
-                approval_requests.c.status == "pending",
-            ).values(status="notification_failed"))
-        return False
+    # True means durably queued. The Actions worker handles external delivery.
     return True
 
 
-def _load_and_claim(request_id: str) -> dict | None:
+def _require_mail_worker(request: Request) -> None:
+    from .scheduled_scan import TELEGRAM_MAIL_WORKFLOW, _require_github_oidc
+    _require_github_oidc(
+        request, workflow=TELEGRAM_MAIL_WORKFLOW,
+        events=frozenset({"schedule", "workflow_dispatch", "push"}),
+    )
+
+
+@router.get("/internal/telegram/mail-approval/config")
+def telegram_mail_worker_config(request: Request) -> dict[str, str]:
+    """Expose only the webhook secret to the exact Actions workflow that needs it."""
+    _require_mail_worker(request)
+    secret = _webhook_secret()
+    if not secret:
+        raise HTTPException(503, "Telegram webhook secret is not configured")
+    return {"url": _BASE_URL + "/internal/telegram/mail-approval", "secret": secret}
+
+
+@router.post("/internal/telegram/mail-approval/claim")
+async def claim_telegram_mail(request: Request) -> JSONResponse:
+    """Atomically reserve the oldest queued draft for private Telegram delivery."""
+    _require_mail_worker(request)
+    try:
+        data = await request.json()
+    except (ValueError, TypeError):
+        raise HTTPException(400, "Invalid JSON") from None
+    chat_id = str(data.get("chat_id", "")) if isinstance(data, dict) else ""
+    if not _CHAT_RE.fullmatch(chat_id):
+        raise HTTPException(422, "Invalid private chat identity")
+    engine = create_engine(_writer_url(), pool_pre_ping=True, pool_size=1, max_overflow=0)
+    try:
+        _metadata.create_all(engine, tables=[approval_requests])
+        with engine.begin() as connection:
+            row = connection.execute(
+                select(approval_requests).where(
+                    approval_requests.c.status == "queued",
+                    approval_requests.c.expires_at >= datetime.now(timezone.utc).isoformat(),
+                ).order_by(approval_requests.c.created_at).limit(1).with_for_update(skip_locked=True)
+            ).mappings().first()
+            if row is None:
+                return JSONResponse({"status": "empty"})
+            payload = json.loads(row["payload"])
+            payload["owner_chat_id"] = chat_id
+            changed = connection.execute(update(approval_requests).where(
+                approval_requests.c.request_id == row["request_id"],
+                approval_requests.c.status == "queued",
+            ).values(status="delivering", payload=json.dumps(payload, ensure_ascii=False))).rowcount
+            if changed != 1:
+                return JSONResponse({"status": "empty"})
+            return JSONResponse({
+                "status": "claimed", "request_id": row["request_id"],
+                "expires_at": row["expires_at"], "draft": payload,
+            })
+    finally:
+        engine.dispose()
+
+
+@router.post("/internal/telegram/mail-approval/delivery")
+async def finish_telegram_mail_delivery(request: Request) -> JSONResponse:
+    """Record a positive Telegram receipt without reopening a claimed request."""
+    _require_mail_worker(request)
+    try:
+        data = await request.json()
+    except (ValueError, TypeError):
+        raise HTTPException(400, "Invalid JSON") from None
+    if not isinstance(data, dict):
+        raise HTTPException(422, "Invalid delivery receipt")
+    request_id = str(data.get("request_id", ""))
+    outcome = str(data.get("outcome", ""))
+    message_id = data.get("message_id")
+    if (not _REQUEST_RE.fullmatch(request_id)
+            or outcome not in {"delivered", "failed", "unknown"}
+            or (outcome == "delivered" and (type(message_id) is not int or message_id <= 0))):
+        raise HTTPException(422, "Invalid delivery receipt")
+    engine = create_engine(_writer_url(), pool_pre_ping=True, pool_size=1, max_overflow=0)
+    try:
+        with engine.begin() as connection:
+            row = connection.execute(select(approval_requests).where(
+                approval_requests.c.request_id == request_id,
+                approval_requests.c.status == "delivering",
+            )).mappings().first()
+            if row is None:
+                return JSONResponse({"status": "already_final"})
+            payload = json.loads(row["payload"])
+            if outcome == "delivered":
+                payload["telegram_message_id"] = message_id
+                status = "pending"
+            else:
+                status = "notification_failed" if outcome == "failed" else "delivery_unknown"
+            connection.execute(update(approval_requests).where(
+                approval_requests.c.request_id == request_id,
+                approval_requests.c.status == "delivering",
+            ).values(status=status, payload=json.dumps(payload, ensure_ascii=False)))
+            return JSONResponse({"status": status})
+    finally:
+        engine.dispose()
+
+
+def _load_and_claim(request_id: str, chat_id: str, message_id: int) -> dict | None:
     engine = create_engine(_writer_url(), pool_pre_ping=True, pool_size=1, max_overflow=0)
     try:
         with engine.begin() as connection:
             row = connection.execute(select(approval_requests).where(
                 approval_requests.c.request_id == request_id
             )).mappings().first()
-            if (row is None or row["status"] != "pending"
+            if (row is None or row["status"] not in {"pending", "delivering"}
                     or row["expires_at"] < datetime.now(timezone.utc).isoformat()):
+                return None
+            payload = json.loads(row["payload"])
+            if (str(payload.get("owner_chat_id", "")) != chat_id
+                    or (payload.get("telegram_message_id") is not None
+                        and payload.get("telegram_message_id") != message_id)):
                 return None
             changed = connection.execute(update(approval_requests).where(
                 approval_requests.c.request_id == request_id,
-                approval_requests.c.status == "pending",
+                approval_requests.c.status.in_(("pending", "delivering")),
             ).values(status="processing")).rowcount
             if changed != 1:
                 return None
-            return {**json.loads(row["payload"]), "recipient_hash": row["recipient_hash"]}
+            return {**payload, "recipient_hash": row["recipient_hash"]}
     finally:
         engine.dispose()
 
@@ -197,8 +220,8 @@ def _set_status(request_id: str, status: str) -> None:
         engine.dispose()
 
 
-def _dispatch(request_id: str) -> str:
-    pending = _load_and_claim(request_id)
+def _dispatch(request_id: str, chat_id: str, message_id: int) -> str:
+    pending = _load_and_claim(request_id, chat_id, message_id)
     if pending is None:
         return "expired_or_already_used"
     try:
@@ -243,25 +266,41 @@ def _dispatch(request_id: str) -> str:
         return "unknown"
 
 
-def _reply(token: str, callback_id: str, message: str) -> None:
-    _api(token, "answerCallbackQuery", {
-        "callback_query_id": callback_id, "text": message, "show_alert": False,
-    })
+def _answer_callback(callback_id: str, message: str, *, alert: bool = False) -> JSONResponse:
+    # Telegram supports one Bot API method as the response to a webhook update.
+    # This clears the button spinner without giving Render the bot token.
+    return JSONResponse({"method": "answerCallbackQuery", "callback_query_id": callback_id,
+                         "text": message[:180], "show_alert": alert})
 
 
-def _edit(token: str, chat_id: int, message_id: int, text: str) -> None:
-    _api(token, "editMessageText", {
-        "chat_id": chat_id, "message_id": message_id,
-        "text": text, "reply_markup": {"inline_keyboard": []},
-    })
+def _cancel_request(request_id: str, chat_id: str, message_id: int) -> bool:
+    engine = create_engine(_writer_url(), pool_pre_ping=True, pool_size=1, max_overflow=0)
+    try:
+        with engine.begin() as connection:
+            row = connection.execute(select(approval_requests).where(
+                approval_requests.c.request_id == request_id,
+                approval_requests.c.status.in_(("pending", "delivering")),
+            )).mappings().first()
+            if row is None:
+                return False
+            payload = json.loads(row["payload"])
+            if (str(payload.get("owner_chat_id", "")) != chat_id
+                    or (payload.get("telegram_message_id") is not None
+                        and payload.get("telegram_message_id") != message_id)):
+                return False
+            return connection.execute(update(approval_requests).where(
+                approval_requests.c.request_id == request_id,
+                approval_requests.c.status.in_(("pending", "delivering")),
+            ).values(status="cancelled")).rowcount == 1
+    finally:
+        engine.dispose()
 
 
 @router.post("/internal/telegram/mail-approval")
 async def telegram_mail_approval(request: Request) -> JSONResponse:
-    config = _telegram_config()
-    if not config:
+    secret = _webhook_secret()
+    if not secret:
         raise HTTPException(503, "Telegram approval is not configured")
-    token, owner_chat, secret = config
     supplied = request.headers.get("x-telegram-bot-api-secret-token", "")
     if not hmac.compare_digest(supplied, secret):
         raise HTTPException(403, "Invalid Telegram webhook secret")
@@ -280,40 +319,32 @@ async def telegram_mail_approval(request: Request) -> JSONResponse:
     message = callback.get("message") or {}
     chat = message.get("chat") or {}
     sender = callback.get("from") or {}
-    if (chat.get("type") != "private" or str(chat.get("id")) != owner_chat
-            or str(sender.get("id")) != owner_chat):
-        _reply(token, str(callback.get("id", "")), "Bu düğme yalnızca sahibine açıktır.")
-        return JSONResponse({"ok": True})
+    callback_id = str(callback.get("id", ""))
+    message_id = message.get("message_id")
+    chat_id = str(chat.get("id", ""))
+    if (chat.get("type") != "private" or not _CHAT_RE.fullmatch(chat_id)
+            or str(sender.get("id")) != chat_id or type(message_id) is not int
+            or message_id <= 0):
+        return _answer_callback(callback_id, "Bu düğme yalnızca sahibine açıktır.", alert=True)
     callback_data = str(callback.get("data", ""))
     if callback_data.startswith("chcancel:"):
         request_id = callback_data.removeprefix("chcancel:")
-        status = "cancelled"
-        engine = create_engine(_writer_url(), pool_pre_ping=True, pool_size=1, max_overflow=0)
-        try:
-            with engine.begin() as connection:
-                connection.execute(update(approval_requests).where(
-                    approval_requests.c.request_id == request_id,
-                    approval_requests.c.status == "pending",
-                ).values(status=status))
-        finally:
-            engine.dispose()
-        _reply(token, str(callback.get("id", "")), "E-posta iptal edildi.")
-        _edit(token, int(chat["id"]), int(message["message_id"]), "E-posta isteği iptal edildi.")
-        return JSONResponse({"ok": True})
+        if not _REQUEST_RE.fullmatch(request_id):
+            return _answer_callback(callback_id, "İstek geçersiz veya süresi dolmuş.", alert=True)
+        cancelled = await run_in_threadpool(_cancel_request, request_id, chat_id, message_id)
+        return _answer_callback(callback_id, "E-posta isteği iptal edildi." if cancelled
+                                else "İstek kullanılmış, süresi dolmuş veya geçersiz.",
+                                alert=not cancelled)
     if not callback_data.startswith("chmail:"):
-        _reply(token, str(callback.get("id", "")), "Bilinmeyen işlem.")
-        return JSONResponse({"ok": True})
+        return _answer_callback(callback_id, "Bilinmeyen işlem.", alert=True)
     request_id = callback_data.removeprefix("chmail:")
-    if not re.fullmatch(r"[A-Za-z0-9_]{20,32}", request_id):
-        _reply(token, str(callback.get("id", "")), "Onay geçersiz veya süresi dolmuş.")
-        return JSONResponse({"ok": True})
-    _reply(token, str(callback.get("id", "")), "Onay alındı, e-posta gönderiliyor…")
-    status = await run_in_threadpool(_dispatch, request_id)
+    if not _REQUEST_RE.fullmatch(request_id):
+        return _answer_callback(callback_id, "Onay geçersiz veya süresi dolmuş.", alert=True)
+    status = await run_in_threadpool(_dispatch, request_id, chat_id, message_id)
     text = {
         "sent": "✅ E-posta Gmail tarafından gönderildi.",
         "blocked": "⛔ E-posta gönderilmedi: onay, ilan veya Gmail koşulları uygun değil.",
         "unknown": "⚠️ Gönderim sonucu doğrulanamadı. Tekrar basma; Gmail ve kayıt defterini kontrol et.",
         "expired_or_already_used": "ℹ️ Bu e-posta süresi dolduğu veya daha önce kullanıldığı için gönderilmedi.",
     }[status]
-    _edit(token, int(chat["id"]), int(message["message_id"]), text)
-    return JSONResponse({"ok": True, "status": status})
+    return _answer_callback(callback_id, text, alert=status != "sent")

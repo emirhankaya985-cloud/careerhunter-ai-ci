@@ -51,6 +51,23 @@ class Job(BaseModel):
         return value
 
 
+class JobReview(BaseModel):
+    """Owner's durable decision about a listing, separate from ATS state."""
+    source: Literal["greenhouse", "lever", "ashby"]
+    job_id: str
+    decision: Literal["saved", "approved", "rejected"]
+    updated_at: datetime = Field(default_factory=utc_now)
+    note: str | None = Field(default=None, max_length=300)
+
+    @field_validator("job_id")
+    @classmethod
+    def review_job_id_nonempty(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be empty")
+        return value
+
+
 class RunStats(BaseModel):
     slot: str
     started_at: datetime

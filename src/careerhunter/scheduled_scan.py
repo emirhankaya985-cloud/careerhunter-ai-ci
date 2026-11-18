@@ -31,6 +31,7 @@ TELEGRAM_REPORT_WORKFLOW = REPO + "/.github/workflows/telegram-report.yml@refs/h
 FOLLOWUP_WORKFLOW = REPO + "/.github/workflows/followup-reminder.yml@refs/heads/main"
 MAIL_REVIEW_WORKFLOW = REPO + "/.github/workflows/gmail-review.yml@refs/heads/main"
 MAIL_SEND_PREFLIGHT_WORKFLOW = REPO + "/.github/workflows/gmail-send-preflight.yml@refs/heads/main"
+TELEGRAM_MAIL_WORKFLOW = REPO + "/.github/workflows/telegram-mail-approvals.yml@refs/heads/main"
 JWK_URL = ISSUER + "/.well-known/jwks"
 _jwks = PyJWKClient(JWK_URL, cache_jwk_set=True, lifespan=3600, timeout=10)
 _lock = threading.Lock()

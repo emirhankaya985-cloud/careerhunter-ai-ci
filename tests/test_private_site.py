@@ -248,7 +248,7 @@ def test_bootstrap_only_runs_with_explicit_flag_and_empty_database(tmp_path, mon
         with engine.begin() as con:
             tables = set(inspect(con).get_table_names())
             assert {"jobs", "contacts", "runs", "schema_versions"} <= tables
-            assert con.execute(text("SELECT version FROM schema_versions")).scalar_one() == 3
+            assert con.execute(text("SELECT version FROM schema_versions")).scalar_one() == 4
             con.execute(text("CREATE TABLE manually_added (id INTEGER)"))
         site._bootstrap_fresh_schema_if_requested("postgresql+psycopg://test-user@db/test")
         with engine.connect() as con:

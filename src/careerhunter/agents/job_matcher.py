@@ -126,11 +126,6 @@ class RuleBasedMatcher:
                 r"(?<!\w)(?:us|usa|uk|eu|germany|united[ -]states|united[ -]kingdom)"
                 r"[- ]+only(?!\w)", text
             ))
-        global_remote = remote and any(
-            _contains(text, term) for term in (
-                "worldwide remote", "remote worldwide", "work from anywhere",
-                "remote from anywhere", "global remote", "remote globally")
-        )
         explicit_turkey = remote and any(
             _contains(text, term) for term in (
                 "remote in turkey", "remote from turkey", "remote from türkiye",
@@ -142,7 +137,7 @@ class RuleBasedMatcher:
             job.turkey_eligibility = "ineligible"
             job.eligibility_status = "ineligible"
             remote_points = 5
-        elif explicit_turkey or global_remote or domestic:
+        elif explicit_turkey or domestic:
             job.turkey_eligibility = "verified"
             job.eligibility_status = "eligible"
             remote_points = 10
