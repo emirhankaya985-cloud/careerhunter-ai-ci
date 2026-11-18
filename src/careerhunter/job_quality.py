@@ -67,7 +67,6 @@ def evaluate(job: Mapping[str, object], *, minimum: int = 60) -> tuple[bool, str
     title = str(job.get("title") or "").strip()
     level = str(job.get("level") or "unknown")
     location = str(job.get("location") or "").strip()
-    eligibility = str(job.get("eligibility") or "needs_review")
     description = str(job.get("description") or "")
     skills = " ".join(str(s) for s in job.get("skills", []) or [])
     try:
