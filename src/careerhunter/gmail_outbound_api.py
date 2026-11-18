@@ -256,7 +256,7 @@ async def send_approved_mail(request: Request) -> JSONResponse:
     repo = _repo()
     job = repo.get_job(data.source, data.job_id)
     if not _email_job_fit(job):
-        raise HTTPException(404, "Active job not found")
+        raise HTTPException(422, "Job must be active, verified, remote and profile-relevant")
     contact = next((c for c in repo.list_contacts(limit=5000)
                     if c.person_id == data.person_id), None)
     if (contact is None or contact.company.strip().casefold() != job.company.strip().casefold()
