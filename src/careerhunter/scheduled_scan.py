@@ -396,7 +396,7 @@ def telegram_digest(request: Request) -> dict[str, object]:
     from .database import jobs as jobs_table, runs as runs_table
     from .models import Job
     from .private_site import _get_engine
-    from .job_quality import classify_profile_fit, evaluate
+    from .job_quality import classify_profile_fit
 
     with _get_engine().connect() as connection:
         latest = connection.execute(
