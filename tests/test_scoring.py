@@ -16,9 +16,9 @@ def test_junior_worldwide_scores_and_verifies():
     assert job.turkey_eligibility == "verified"
 
 
-def test_us_only_is_hard_rejection():
+def test_us_only_remote_keeps_profile_score_and_exposes_region_limit():
     job = RuleBasedMatcher(PROFILE, KEYWORDS).score(make_job(description="Python, remote, US only"))
-    assert job.match_score == 0
+    assert job.match_score >= 60
     assert job.eligibility_status == "ineligible"
 
 

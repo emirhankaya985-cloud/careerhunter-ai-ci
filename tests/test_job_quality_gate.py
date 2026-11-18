@@ -75,10 +75,10 @@ def test_onsite_roles_outside_target_country_are_not_remote_matches():
 def test_python_stack_is_needed_for_generic_software_roles():
     assert not evaluate(candidate(
         "Software Engineer", "London",
-        skills=[], description="Frontend only JavaScript React and CSS"))[0]
+        remote_type="remote", skills=[], description="Frontend only JavaScript React and CSS"))[0]
     assert evaluate(candidate(
         "Software Engineer", "London",
-        skills=["Python"], description="Backend FastAPI APIs"))[0]
+        remote_type="remote", skills=["Python"], description="Backend FastAPI APIs"))[0]
 
 
 def test_remote_region_warning_does_not_hide_job_but_low_score_does():
