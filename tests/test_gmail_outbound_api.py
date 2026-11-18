@@ -14,6 +14,8 @@ def owner_mail_client(tmp_path, monkeypatch):
     repo = SQLiteRepository(dbfile)
     repo.upsert_jobs([Job(job_id="demo42", source="ashby", company="Example",
                           title="Junior Python Developer",
+                          remote_type="remote", experience_level="junior",
+                          match_score=75, verification_status="ATS_LISTED",
                           job_url="https://example.org/demo42",
                           source_url="https://api.ashbyhq.com/posting-api/job-board/example")])
     repo.upsert_contact(Contact(
