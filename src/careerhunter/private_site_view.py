@@ -98,6 +98,7 @@ form.search{display:flex;gap:8px;flex-wrap:wrap;margin:24px 0}input.searchinput{
 .details{margin-top:16px;border-top:1px solid #293b50;padding-top:15px}
 details summary{cursor:pointer;color:#8fe7cb;font-weight:700}
 .draft{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;background:#0b1525;border:1px solid #263c52;padding:14px;border-radius:10px;margin-top:14px}
+.mailbox{margin-top:16px;padding-top:14px;border-top:1px solid #293b50}.mailbox select,.mailbox input,.mailbox textarea{display:block;width:100%;margin:8px 0 12px;padding:10px;border:1px solid #41536b;border-radius:8px;background:#0b1525;color:#eaf1fb;font:inherit}.mailbox textarea{min-height:170px}.mailstatus{margin:10px 0;color:#abd4c6}.mail-send{background:#e8bd6e;color:#2a1d08}
 .empty{color:#b4c3d8;padding:30px 0;text-align:center}.pagination{display:flex;justify-content:flex-end;gap:10px;margin:18px 0}
 .pagebtn{border:1px solid #48637a;border-radius:9px;padding:9px 14px;color:#c9dbed}
 footer{margin-top:40px;color:#627997;font-size:12px}.tablewrap{overflow-x:auto}
@@ -197,6 +198,7 @@ nav .links{display:flex;flex-wrap:wrap}.sidebarbottom,.tiny{display:none}main{pa
 <div class="panel"><h2>👥 Kişi kayıtları ve kişisel mesajlar</h2>
 <p class="muted">Her kartta bulunan kaynak ve hazırlanmış mesajı inceleyebilirsin.
 İletişim adresi doğrulanmamış kişiler otomatik olarak gönderilebilir kabul edilmez.</p></div>
+<div class="panel"><h2>✉ Gmail e-posta durumu</h2><p id="mail-setup" class="mailstatus" role="status">E-posta durumu kontrol ediliyor…</p><div class="small muted">Sistem kendiliğinden e-posta yollamaz. Her alıcıyı ve her mesajı ayrıca onaylaman gerekir.</div></div>
 <div class="cards">{% for c in people %}
 <article class="person"><div class="row space"><h3>{{ c.name }}</h3><span class="tag">{{ c.status }}</span></div>
 <div class="role">{{ c.role }} · {{ c.company }}</div>
@@ -208,9 +210,32 @@ nav .links{display:flex;flex-wrap:wrap}.sidebarbottom,.tiny{display:none}main{pa
 {% if c.message_variant_a_tr %}<div class="small muted" style="margin-top:12px">Türkçe taslak</div><div class="draft">{{ c.message_variant_a_tr }}</div>{% endif %}
 {% if not c.message_variant_a and not c.message_variant_a_tr %}<p class="muted">Bu kişi için henüz taslak yok.</p>{% endif %}
 </details></div>
+<div class="mailbox" data-person="{{ c.person_id }}">
+{% if c.status == "approved_by_user" %}<div class="mailstatus">✓ Bu kişi panelden onaylanmış</div>
+{% elif c.person_id in (mail_eligible_people|default([])) %}
+<label class="small"><input type="checkbox" class="approve-confirm"> Kaynağı kontrol ettim; bu herkese açık, işle ilgili İK/recruiter adresi ve bu kişiye yazmayı onaylıyorum.</label>
+<button type="button" class="action approve-contact">Kişiyi e-posta için onayla</button>
+{% else %}<div class="small muted">E-posta gönderimi için herkese açık doğrulanmış İK/recruiter adresi ve kaynak kanıtı gerekli. Özel adres tahmin edilmez.</div>{% endif %}
+{% if (mail_jobs_by_person|default({})).get(c.person_id) %}
+<label for="job-{{ loop.index }}" class="small">İlgili uzaktan ilan</label><select id="job-{{ loop.index }}" class="mail-job"><option value="">İlan seç</option>{% for j in (mail_jobs_by_person|default({})).get(c.person_id, []) %}<option value="{{ j.source }}|{{ j.job_id }}">{{ j.title }} · {{ j.match_score or 0 }}/100</option>{% endfor %}</select>
+<button type="button" class="action prepare-mail">İlana özel taslak hazırla</button>
+<div class="mail-editor" hidden><div class="small muted recipient-preview"></div><label class="small">Konu</label><input class="mail-subject" maxlength="160"><label class="small">Mesaj (göndermeden önce düzenleyebilirsin)</label><textarea class="mail-body" maxlength="12000"></textarea><label class="small"><input type="checkbox" class="send-confirm"> Alıcıyı, ilanı ve mesajın tamamını kontrol ettim; bu e-postayı şimdi gönder.</label><button type="button" class="action mail-send">Bu e-postayı gönder</button></div>
+{% else %}<div class="small muted">Bu şirket için doğrulanmış, uygun uzaktan ilan bulunmuyor.</div>{% endif %}
+<div class="mailstatus" role="status" aria-live="polite"></div></div>
 </article>{% else %}<p class="empty">Henüz kayıtlı kişi bulunmuyor.</p>{% endfor %}</div>
+<script>
+async function ownerCsrf(){const r=await fetch('/internal/owner/mail/csrf',{credentials:'same-origin'});if(!r.ok)throw Error('Oturum doğrulanamadı');return (await r.json()).csrf_token}
+async function mailPost(url,data){const csrf=await ownerCsrf();const r=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify(data)});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.detail||'İşlem tamamlanamadı');return d}
+fetch('/internal/owner/mail/status',{credentials:'same-origin'}).then(r=>r.ok?r.json():Promise.reject()).then(s=>{const el=document.getElementById('mail-setup');el.textContent=s.status==='ready'?'E-posta hazır · onaylı İK kişisi: '+s.approved_contact_count+' · otomatik yollama kapalı':'E-posta kapalı · Gmail gönderme yetkisi: '+(s.send_oauth_present?'var':'eksik')+' · e-posta anahtarı: '+(s.send_enabled?'açık':'kapalı')+' · kayıtlı onaylı İK kişisi: '+s.approved_contact_count+' · güvenli gönderim kaydı: '+(s.receipt_writer_present?'hazır':'eksik')}).catch(()=>{document.getElementById('mail-setup').textContent='Gmail e-posta durumu okunamadı.'});
+document.querySelectorAll('.mailbox').forEach(box=>{
+ const person_id=box.dataset.person,status=box.querySelector('.mailstatus');
+ box.querySelector('.approve-contact')?.addEventListener('click',async e=>{try{if(!box.querySelector('.approve-confirm').checked)throw Error('Önce herkese açık kaynak ve alıcıyı kontrol edip onayla.');await mailPost('/internal/owner/mail/contact/approve',{person_id,confirm_public_professional_contact:true});status.textContent='✓ Kişi onaylandı. Taslak hazırlayabilirsin.';e.currentTarget.remove();box.querySelector('.approve-confirm').closest('label').remove()}catch(err){status.textContent=err.message}});
+ box.querySelector('.prepare-mail')?.addEventListener('click',async()=>{try{const [source,job_id]=(box.querySelector('.mail-job').value||'').split('|');if(!source||!job_id)throw Error('Önce ilan seç.');const d=await mailPost('/internal/owner/mail/draft',{person_id,source,job_id});box.dataset.job=source+'|'+job_id;box.querySelector('.recipient-preview').textContent=`Alıcı: ${d.recipient_name} <${d.recipient_address}> · Kanıt: ${d.contact_evidence_url} · İlan: ${d.job_title} — ${d.company} · Eşleşen beceriler: ${d.matched_profile_skills.join(', ')||'yok'}`;box.querySelector('.mail-subject').value=d.subject;box.querySelector('.mail-body').value=d.body;box.querySelector('.mail-editor').hidden=false;status.textContent='Taslak hazır. İçeriği kontrol edip düzenle.'}catch(err){status.textContent=err.message}});
+ box.querySelector('.mail-send')?.addEventListener('click',async()=>{try{if(!box.querySelector('.send-confirm').checked)throw Error('Önce açık onay kutusunu işaretle.');if(!window.confirm('Bu kişiye düzenlenmiş e-postayı şimdi göndermek istiyor musun?'))return;const [source,job_id]=(box.dataset.job||'|').split('|');const d=await mailPost('/internal/owner/mail/send',{person_id,source,job_id,subject:box.querySelector('.mail-subject').value,body:box.querySelector('.mail-body').value,confirm_send:true});status.textContent=d.status==='sent'?'✓ E-posta Gmail tarafından kabul edildi.':'E-posta sonucu doğrulanmadı.'}catch(err){status.textContent=err.message}})
+});
+</script>
 {% endif %}
-<footer>🔐 Bu ekran yalnızca giriş yapan sahibine açıktır · İletişim gönderimi yoktur · © CareerHunter AI</footer>
+<footer>🔐 Bu ekran yalnızca giriş yapan sahibine açıktır · E-posta taslağı ve gönderimi kişi bazında senin onayınla çalışır · © CareerHunter AI</footer>
 </main></div></body></html>
 """)
 
