@@ -141,7 +141,7 @@ class RuleBasedMatcher:
         if abroad_only and remote:
             job.turkey_eligibility = "ineligible"
             job.eligibility_status = "ineligible"
-            remote_points = 0
+            remote_points = 5
         elif explicit_turkey or global_remote or domestic:
             job.turkey_eligibility = "verified"
             job.eligibility_status = "eligible"
@@ -159,8 +159,6 @@ class RuleBasedMatcher:
         total = technical + experience_points + career_points + remote_points + freshness
         if is_senior or requires_senior_experience:
             total = min(total, 20)
-        if abroad_only and remote:
-            total = 0
         job.match_score = min(100, max(0, total))
         job.skills_required = matched
         job.score_reasons = [

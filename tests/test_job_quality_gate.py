@@ -59,25 +59,30 @@ def test_non_junior_and_unrelated_positions_are_rejected(title):
     assert not evaluate(candidate(title))[0]
 
 
-def test_non_target_country_is_not_reported_without_global_eligibility():
-    assert not evaluate(candidate("Junior Python Developer", "Taiwan"))[0]
-    assert not evaluate(candidate("Junior Python Developer", "Remote, Singapore"))[0]
-    assert not evaluate(candidate("Junior Python Developer", "Munich, Germany"))[0]
-    assert evaluate(candidate("Junior Python Developer", "Munich, Germany",
-                              eligibility="eligible"))[0]
+def test_remote_roles_in_any_country_are_kept_for_review():
+    assert evaluate(candidate("Junior Python Developer", "Remote, Taiwan"))[0]
+    assert evaluate(candidate("Junior Python Developer", "Remote, Singapore"))[0]
+    assert evaluate(candidate("Junior Python Developer", "Remote, Munich, Germany"))[0]
+    assert evaluate(candidate("Junior Python Developer", "Remote, United States",
+                              eligibility="ineligible"))[0]
+
+
+def test_onsite_roles_outside_target_country_are_not_remote_matches():
+    assert evaluate(candidate("Junior Python Developer", "Taiwan"))[1] == "not_remote"
+    assert evaluate(candidate("Junior Python Developer", "Munich, Germany"))[1] == "not_remote"
 
 
 def test_python_stack_is_needed_for_generic_software_roles():
     assert not evaluate(candidate(
         "Software Engineer", "London",
-        skills=[], description="Frontend only JavaScript React and CSS"))[0]
+        remote_type="remote", skills=[], description="Frontend only JavaScript React and CSS"))[0]
     assert evaluate(candidate(
         "Software Engineer", "London",
-        skills=["Python"], description="Backend FastAPI APIs"))[0]
+        remote_type="remote", skills=["Python"], description="Backend FastAPI APIs"))[0]
 
 
-def test_ineligible_or_below_minimum_is_rejected_even_if_title_matches():
-    assert not evaluate(candidate(
+def test_remote_region_warning_does_not_hide_job_but_low_score_does():
+    assert evaluate(candidate(
         "Junior Python Developer", eligibility="ineligible"))[0]
     assert not evaluate(candidate(
         "Junior Python Developer", score=20))[0]
@@ -92,7 +97,7 @@ def test_zero_good_jobs_message_reports_filtered_count_without_wrong_links():
     assert len(results) == 1
     text, buttons = results[0]
     assert "5" in text and "Ön elemeden geçen yeni ilan: <b>0</b>" in text
-    assert "filtrelendi" in text
+    assert "rapor dışında kaldı" in text
     assert buttons == []
 
 
@@ -114,7 +119,7 @@ def test_live_digest_can_show_one_good_job_without_all_the_bad_ones():
     assert len(rendered) == 1
     assert len(rendered[0][1]) == 1
     assert "Junior Python Developer" in rendered[0][0]
-    assert "Uygun fırsat: <b>1</b>" in rendered[0][0]
+    assert "Doğrulanmış uzaktan ilan: <b>1</b>" in rendered[0][0]
 
 
 def test_real_new_records_are_kept_separate_from_quality_eligible_alerts():
@@ -133,8 +138,7 @@ def test_real_new_records_are_kept_separate_from_quality_eligible_alerts():
         }],
     }
     message, buttons = make_messages(payload)[0]
-    assert "Bulunan yeni kayıt: <b>9</b>" in message
-    assert "Uygun fırsat: <b>1</b>" in message
-    assert "8" in message and "filtre" in message.lower()
+    assert "Yeni ilan: <b>9</b>" in message
+    assert "Doğrulanmış uzaktan ilan: <b>1</b>" in message
     assert len(buttons) == 1
 

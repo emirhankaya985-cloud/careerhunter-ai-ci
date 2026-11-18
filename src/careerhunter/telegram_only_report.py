@@ -19,12 +19,9 @@ FILTER_REASON_LABELS = {
     "low_score": "Puan eşiğinin altında",
     "invalid_score": "Puan hesaplanamadı",
     "senior_or_non_engineering": "Senior / hedef alan dışı",
+    "not_remote": "Uzaktan çalışma değil",
     "not_target_role": "Hedef pozisyon değil",
-    "not_eligible": "Bölgesel uygunluk olumsuz",
     "generic_software_no_target_stack": "Hedef teknoloji bulunamadı",
-    "location_unknown": "Konum belirsiz",
-    "region_restricted": "Bölge kısıtlaması",
-    "outside_target_geography": "Hedef coğrafya dışında",
 }
 
 
@@ -79,10 +76,11 @@ def _score(job: dict) -> int:
 
 
 def _priority(job: dict, threshold: int) -> bool:
-    """High score alone is never proof of early-career or country eligibility."""
-    return (_score(job) >= threshold
-            and job.get("level") == "junior"
-            and job.get("eligibility") == "eligible")
+    """Prioritize strong junior remote matches; report region limits separately."""
+    return job.get("fit_status") == "strong_match" or (
+        not job.get("fit_status") and _score(job) >= threshold
+        and job.get("level") == "junior"
+    )
 
 
 def _daily_limit() -> int:
@@ -106,13 +104,11 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
     strong = max(0, int(payload.get("strong_count", 0)))
     threshold = max(0, min(100, int(payload.get("threshold", 75))))
     listed = max(0, int(payload.get("listed_count", len(raw_items))))
-    # Put verified junior matches first; uncertain roles are review candidates,
-    # not guaranteed suitable offers. Preserve a high-score fallback after them.
+    fit_rank = {"strong_match": 2, "review": 1, "not_suitable": 0}
     items = sorted(
         raw_items,
         key=lambda j: (
-            _priority(j, threshold),
-            j.get("eligibility") != "ineligible" and j.get("level") != "senior",
+            fit_rank.get(j.get("fit_status"), int(_priority(j, threshold))),
             _score(j),
         ),
         reverse=True,
@@ -128,8 +124,8 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
         if total:
             excluded = max(0, int(payload.get("quality_rejected", total)))
             lines.append(
-                f"🛡️ {excluded} ilgisiz veya uygunluğu düşük ilan filtrelendi. "
-                "Alakasız iş linkleri gönderilmiyor."
+                f"🛡️ {excluded} ilan uzaktan çalışma veya kaynak doğrulaması nedeniyle rapor dışında kaldı. "
+                "Bulunan ilanlar veritabanında saklanır."
             )
         else:
             lines.append("Bu taramada yeni ilan yok. Bir sonraki tarama saat başında. ✅")
@@ -145,8 +141,8 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
         batch = items[start:start + CHUNK_SIZE]
         lines = [
             "📬 <b>CareerHunter AI | Saatlik ilan taraması</b>",
-            f"🆕 Bulunan yeni kayıt: <b>{total}</b> · ✅ Uygun fırsat: <b>{listed}</b> · ⭐ {threshold}+ puan: <b>{strong}</b>",
-            f"✅ Öncelikli (junior + konum sinyali): <b>{sum(_priority(j, threshold) for j in items)}</b> / paylaşılan {len(items)}",
+            f"🆕 Yeni ilan: <b>{total}</b> · 🌍 Doğrulanmış uzaktan ilan: <b>{listed}</b>",
+            f"✅ Güçlü eşleşme: <b>{int((payload.get('fit_counts') or {}).get('strong_match', strong))}</b> · 🔎 İncele: <b>{int((payload.get('fit_counts') or {}).get('review', 0))}</b> · ⛔ Zayıf/uygunsuz: <b>{int((payload.get('fit_counts') or {}).get('not_suitable', 0))}</b>",
             f"📦 Bölüm {part + 1}/{count}",
         ]
         if part == 0 and (country_line := _country_line(payload)):
@@ -158,12 +154,15 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
         for offset, job in enumerate(batch, start + 1):
             score = _score(job)
             ineligible = job.get("eligibility") == "ineligible"
-            senior = job.get("level") == "senior"
-            badge = ("⛔ Uygun görünmüyor" if ineligible or senior else
-                     "✅ Öncelikli eşleşme" if _priority(job, threshold) else
-                     "🔎 Yüksek puan; koşullar teyit edilmeli" if score >= threshold else
-                     "ℹ️ Düşük/orta uyum")
-            eligibility = ("⛔ Türkiye'den uygun değil" if ineligible else
+            badge = {
+                "strong_match": "✅ Güçlü profil eşleşmesi",
+                "review": "🔎 Kısmi eşleşme; incele",
+                "not_suitable": "⛔ Profiline uygun görünmüyor",
+            }.get(job.get("fit_status"),
+                 "✅ Öncelikli eşleşme" if _priority(job, threshold) else
+                 "🔎 Yüksek puan; koşullar teyit edilmeli" if score >= threshold else
+                 "ℹ️ Düşük/orta uyum")
+            eligibility = ("🌍 İlan belirli ülkelerle sınırlı olabilir; başvuru koşullarını kontrol et" if ineligible else
                            "🟢 İlanda Türkiye/global konum sinyali var; şartları kontrol et" if
                            job.get("eligibility") == "eligible" else
                            "🌍 Türkiye'den çalışma: teyit gerekli")
@@ -174,6 +173,9 @@ def make_messages(payload: dict) -> list[tuple[str, list[dict]]]:
                 f"<b>{offset}. {safe(job.get('title'))}</b>",
                 f"🏢 {safe(job.get('company'), 60)} · 📍 {safe(job.get('location'), 60)}",
                 f"🎯 {score}/100 · {badge}",
+                f"🧭 {safe(job.get('fit_reason') or 'Profil eşleşmesi ayrıca incelenmeli', 120)}",
+                (f"🧰 Eşleşen beceriler: {safe(', '.join(job.get('matched_skills') or []), 100)}"
+                 if job.get("matched_skills") else "🧰 İstenen beceriler profilinle eşleşmedi"),
                 f"📅 Son başvuru günü: {safe(job.get('application_deadline') or 'İlanda açık tarih yok', 20)}",
                 eligibility,
                 "",

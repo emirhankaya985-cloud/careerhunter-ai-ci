@@ -81,10 +81,9 @@ def test_only_one_short_digest_with_three_links_and_safe_html(configured, httpx_
 def test_already_seen_low_score_and_remote_block_are_silent(configured, httpx_mock):
     assert not telegram.publish_daily_digest(
         stats(), [job(1, status="seen"), job(2, score=60),
-                  job(3, eligibility="ineligible"), job(4, senior=True)])
+                  job(3, remote_type="onsite"), job(4, senior=True)])
     assert not telegram.publish_daily_digest(stats(), [
         job(12, remote_type="unknown"),
-        job(13, turkey_eligibility="unknown"),
         job(14, verification_status="REVIEW_REQUIRED"),
     ])
     assert not telegram.publish_daily_digest(stats(status="failed"), [job(5)])

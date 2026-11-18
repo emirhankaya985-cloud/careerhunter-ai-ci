@@ -60,11 +60,11 @@ def test_remote_title_skill_and_experience_priority():
     assert junior.match_method == "rules"
 
 
-def test_ineligible_remote_never_becomes_high_match():
+def test_ineligible_remote_keeps_role_match_score_for_global_search():
     m = RuleBasedMatcher(sample(), {"junior": ["junior"]})
     result = m.score(example_job(description="Python FastAPI SQL. US only remote."))
     assert result.eligibility_status == "ineligible"
-    assert result.match_score == 0
+    assert result.match_score >= 65
 
 
 def test_rescore_preserves_first_seen_and_verification_time(tmp_path, monkeypatch):
@@ -152,7 +152,7 @@ def test_remote_us_only_hyphen_overrides_any_worldwide_claim():
     ).model_copy(update={"location": "Remote US-only", "remote_type": "unknown"})
     scored = matcher.score(role)
     assert scored.eligibility_status == "ineligible"
-    assert scored.match_score == 0
+    assert scored.match_score >= 60
 
 
 def test_domestic_ankara_without_country_name_is_eligible():

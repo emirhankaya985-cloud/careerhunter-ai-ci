@@ -23,7 +23,7 @@ def test_five_weak_jobs_go_to_telegram_not_site():
     batches = report.make_messages(data)
     assert len(batches) == 1
     message, buttons = batches[0]
-    assert "Bulunan yeni kayıt: <b>5</b>" in message
+    assert "Yeni ilan: <b>5</b>" in message
     assert message.count("Düşük/orta uyum") == 5
     assert "&lt;1&gt;" in message
     assert "<1>" not in message
@@ -43,12 +43,12 @@ def test_all_12_are_sent_in_three_batches(monkeypatch):
     assert "12." in chunks[2][0]
 
 
-def test_ineligible_high_score_is_marked_as_unsuitable():
+def test_region_limited_high_score_is_reported_with_warning():
     data = {"status": "ready", "jobs_new": 1,
             "items": [job(1, score=90, eligibility="ineligible")]}
     result = report.make_messages(data)
-    assert "Uygun görünmüyor" in result[0][0]
-    assert "Türkiye'den uygun değil" in result[0][0]
+    assert "ülkelerle sınırlı olabilir" in result[0][0]
+    assert "başvuru koşullarını kontrol et" in result[0][0]
 
 
 def test_no_jobs_still_delivers_daily_health_confirmation():
@@ -93,7 +93,7 @@ def test_default_daily_limit_prevents_message_flood(monkeypatch):
     assert len(batches) == 2
     assert sum(len(buttons) for _, buttons in batches) == 10
     assert "15 ek ilan" in batches[-1][0]
-    assert "Uygun fırsat: <b>25</b>" in batches[0][0]
+    assert "Doğrulanmış uzaktan ilan: <b>25</b>" in batches[0][0]
 
 
 def test_priority_jobs_come_before_ambiguous_high_scores(monkeypatch):
@@ -110,7 +110,7 @@ def test_priority_jobs_come_before_ambiguous_high_scores(monkeypatch):
     assert buttons[0]["url"].endswith("/2")
     assert "✅ Öncelikli eşleşme" in text
     assert "🔎 Yüksek puan; koşullar teyit edilmeli" in text
-    assert "Öncelikli (junior + konum sinyali): <b>1</b>" in text
+    assert "Güçlü eşleşme: <b>2</b>" in text
     assert "İlanda Türkiye/global konum sinyali var; şartları kontrol et" in text
     assert text.index("Python Engineer &lt;2&gt;") < text.index("Python Engineer &lt;1&gt;")
 
@@ -161,8 +161,8 @@ def test_filtered_reasons_are_explicit_without_untrusted_source_text():
 def test_zero_selected_jobs_also_explain_filter_reasons():
     result = report.make_messages({
         "status": "ready", "jobs_new": 4, "quality_rejected": 4,
-        "items": [], "quality_reasons": {"region_restricted": 4},
+        "items": [], "quality_reasons": {"not_remote": 4},
     })
     msg, buttons = result[0]
-    assert "Bölge kısıtlaması: 4" in msg
+    assert "Uzaktan çalışma değil: 4" in msg
     assert buttons == []
