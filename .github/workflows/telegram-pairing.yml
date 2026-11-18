@@ -21,6 +21,7 @@ on:
     paths:
       - .github/workflows/telegram-pairing.yml
       - src/careerhunter/telegram_github.py
+      - src/careerhunter/telegram_mail_approval.py
 
 permissions:
   contents: read
