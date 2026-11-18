@@ -219,6 +219,20 @@ def _panel_data(view: str, query: str, page: int, order: str = "fit") -> dict:
     # For larger installations, contacts can be paginated as well; current
     # project size is small enough to give the owner the full list.
     people = repo.list_contacts(limit=2000)
+    mail_jobs_by_person = {}
+    mail_eligible_people = set()
+    if view == "people":
+        from .gmail_outbound_api import _email_job_fit, _is_ik_contact
+        active_mail_jobs = [job for job in repo.list_jobs(active_only=True, limit=5000)
+                            if _email_job_fit(job)]
+        for person in people:
+            mail_jobs_by_person[person.person_id] = [job for job in active_mail_jobs
+                if job.company.strip().casefold() == person.company.strip().casefold()]
+            if (person.email_public and person.primary_source_url
+                    and str(person.primary_source_url).startswith("https://")
+                    and person.research_confidence == "high" and not person.do_not_contact
+                    and _is_ik_contact(person)):
+                mail_eligible_people.add(person.person_id)
     countries = [
         {"code": code, "flag": flag, "name": name,
          "total": groups.get(name, {}).get("total", 0),
@@ -245,6 +259,8 @@ def _panel_data(view: str, query: str, page: int, order: str = "fit") -> dict:
                     "people": len(people),
                     "drafts": sum(bool(p.message_variant_a or p.message_variant_a_tr) for p in people)},
         "countries": countries, "people": people if view == "people" else [],
+        "mail_jobs_by_person": mail_jobs_by_person,
+        "mail_eligible_people": mail_eligible_people,
         "applications": repo.list_opportunities(limit=300) if view == "applications" else [],
         "followups": repo.list_followups(pending_only=True, limit=300)
                      if view == "applications" else [],
