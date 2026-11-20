@@ -48,7 +48,7 @@ COUNTRIES = {
     'QA': ('Qatar', 'Doha'),
     'TR': ('Türkiye', 'Turkey', 'Istanbul', 'İstanbul', 'Ankara'),
 }
-FIXED = ('US', 'DE')
+FIXED = ('US', 'DE', 'GB')
 # All seven endpoints returned nonempty valid JSON on 2026-11-20.
 # They are global boards; no country coverage is inferred from employer identity.
 DISCOVERY_BOARDS = (
@@ -66,8 +66,9 @@ def hour_index(at: datetime) -> int:
 
 def country_batch(at: datetime) -> tuple[str, ...]:
     rotating = tuple(code for code in COUNTRIES if code not in FIXED)
-    start = hour_index(at) * 4 % len(rotating)
-    return FIXED + tuple(rotating[(start + i) % len(rotating)] for i in range(4))
+    size = 6 - len(FIXED)
+    start = hour_index(at) * size % len(rotating)
+    return FIXED + tuple(rotating[(start + i) % len(rotating)] for i in range(size))
 
 
 def discovery_companies(at: datetime) -> list[dict]:
@@ -89,8 +90,8 @@ def rotation_report(jobs, at: datetime) -> str:
     batch = country_batch(at)
     stamp = at.astimezone(ZoneInfo('Europe/Istanbul')).strftime('%Y-%m-%d %H:%M')
     lines = [f'\n## Ülke odağı — {stamp} TRT',
-             '\nABD ve Almanya sabit; diğer 34 ülke dörderli döner.',
-             '36 hedefin tamamı en geç 9 saatlik kesintisiz döngüde yer alır.',
+             '\nABD, Almanya ve İngiltere sabit; diğer 33 ülke üçerli döner.',
+             '36 hedefin tamamı en geç 11 saatlik kesintisiz döngüde yer alır.',
              'Saatler hedef zamandır; GitHub Actions gecikebilir.',
              '\n| Ülke | Konumu eşleşen ilan | Profil puanı ≥65, kıdemli değil |',
              '|---|---:|---:|']

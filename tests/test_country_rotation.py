@@ -9,11 +9,11 @@ from careerhunter.country_rotation import (
 )
 
 
-def test_every_country_covered_from_any_hour_within_nine_runs():
+def test_every_country_covered_from_any_hour_within_eleven_runs():
     start = datetime(2026, 11, 20, tzinfo=timezone.utc)
-    for offset in range(34):
-        batches = [country_batch(start + timedelta(hours=offset+i)) for i in range(9)]
-        assert all(len(set(batch)) == 6 and batch[:2] == ('US', 'DE') for batch in batches)
+    for offset in range(33):
+        batches = [country_batch(start + timedelta(hours=offset+i)) for i in range(11)]
+        assert all(len(set(batch)) == 6 and batch[:3] == ('US', 'DE', 'GB') for batch in batches)
         assert set().union(*map(set, batches)) == set(COUNTRIES)
 
 
