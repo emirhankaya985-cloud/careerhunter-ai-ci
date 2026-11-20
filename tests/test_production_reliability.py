@@ -99,6 +99,7 @@ def test_job_collection_refuses_success_when_all_sources_fail(tmp_path, monkeypa
             "sources.yaml": {}, "profile.yaml": {}, "keywords.yaml": {},
         }[name]
 
+    monkeypatch.setattr(orchestrator, "discovery_companies", lambda at: [])
     monkeypatch.setattr(orchestrator, "SOURCE_CLASSES", {"greenhouse": UnavailableSource})
     monkeypatch.setattr(orchestrator, "load_yaml", config)
     repo = SQLiteRepository(tmp_path / "test.db")
