@@ -5,10 +5,10 @@ Greenhouse boards per hour from Canonical, Datadog, Cloudflare, Elastic, MongoDB
 Grafana Labs and Adyen. All seven endpoints returned nonempty JSON on 2026-11-20.
 Every extra board is revisited within four consecutive successful hourly runs.
 
-The shortlist focuses on six countries per hour: US and DE always, plus four
-of 34 rotating targets. Every target appears within nine consecutive hours.
+The shortlist focuses on six countries per hour: US, DE and GB always, plus three
+of 33 rotating targets. Every target appears within eleven consecutive hours.
 The schedule uses absolute UTC hours, so midnight and DST do not reset coverage.
-GitHub Actions can delay or skip scheduled runs; nine hours is not a delivery SLA.
+GitHub Actions can delay or skip scheduled runs; eleven hours is not a delivery SLA.
 
 Targets (36): US, DE, GB, CA, CH, NL, AU, SE, DK, NO, FI, IE, FR, AT, BE, LU,
 SG, JP, KR, NZ, AE, IL, TW, CZ, PL, EE, LT, LV, ES, PT, IT, IS, SI, SA, QA, TR.
