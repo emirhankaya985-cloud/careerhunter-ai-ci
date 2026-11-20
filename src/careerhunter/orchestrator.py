@@ -10,6 +10,9 @@ from .agents.ai_job_matcher import AIJobMatcher
 from .agents.hook_writer import prepare_drafts
 from .agents.job_matcher import RuleBasedMatcher
 from .config import load_yaml, project_path
+from .country_rotation import (
+    COUNTRIES, country_batch, discovery_companies, location_countries, rotation_report,
+)
 from .personal_profile import load_match_profile
 from .database import DatabaseRepository, create_repository
 from .intelligence.company import build_company_signals
@@ -63,7 +66,15 @@ class Orchestrator:
     def _jobs(self, stats: RunStats, dry_run: bool) -> tuple[RunStats, Path]:
         source_cfg = load_yaml("sources.yaml")
         companies = load_yaml("companies.yaml").get("companies", [])
+        # Existing sources remain enabled. Full snapshots preserve closure safety.
+        known = {c["name"] for c in companies}
+        companies = companies + [c for c in discovery_companies(stats.started_at)
+                                 if c["name"] not in known]
         profile = load_match_profile()
+        profile = dict(profile)
+        focus = set(country_batch(stats.started_at))
+        profile["target_countries"] = [COUNTRIES[code][0]
+                                       for code in country_batch(stats.started_at)]
         matcher = RuleBasedMatcher(profile, load_yaml("keywords.yaml"))
         jobs = []
         errors = []
@@ -135,7 +146,13 @@ class Orchestrator:
         # existing jobs to "seen"; LLM may have enriched the same objects.
         if not dry_run:
             self._telegram_candidates = [job for job in jobs if job.status == "new"]
-        content = render_jobs(jobs, stats)
+        # Focus affects the shortlist, never the full-board persistence/closure set.
+        focused_jobs = [job for job in jobs
+                        if location_countries(job.location) & focus
+                        or (job.remote_type == "remote"
+                            and not location_countries(job.location))]
+        content = render_jobs(focused_jobs, stats)
+        content += rotation_report(jobs, stats.started_at)
         if archived:
             content += f"\n## Otomatik arşiv\n\n- Güçlü, Türkiye'den çalışmaya uygun uzaktan eşleşme: {archived}\n"
         if errors:
