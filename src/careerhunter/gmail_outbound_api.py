@@ -111,6 +111,20 @@ def mail_status(request: Request) -> dict[str, object]:
         and not contact.do_not_contact
         for contact in _repo().list_contacts(limit=5000)
     )
+    application_contacts = sum(
+        contact.category == "job_application_email"
+        and contact.research_confidence == "high"
+        and bool(contact.email_public)
+        and bool(contact.primary_source_url)
+        and urlsplit(str(contact.primary_source_url)).scheme == "https"
+        and not contact.do_not_contact
+        and contact.status not in {"not_interested", "closed"}
+        for contact in _repo().list_contacts(limit=5000)
+    )
+    auto_dispatch = (
+        os.getenv("CAREERHUNTER_GMAIL_AUTO_OUTREACH_ENABLED") == "true"
+        and os.getenv("CAREERHUNTER_GMAIL_AUTO_TEMPLATE_APPROVED") == "v1"
+    )
     return {
         "status": "ready" if (
             os.getenv("CAREERHUNTER_GMAIL_SEND_ENABLED") == "true"
@@ -123,7 +137,11 @@ def mail_status(request: Request) -> dict[str, object]:
         "send_oauth_present": bool(os.getenv("GMAIL_SEND_REFRESH_TOKEN", "").strip()),
         "receipt_writer_present": bool(os.getenv("CAREERHUNTER_GMAIL_SEND_DATABASE_URL", "").strip()),
         "approved_contact_count": approved_contacts,
-        "automatic_dispatch_enabled": False,
+        "application_contact_count": application_contacts,
+        "automatic_dispatch_enabled": auto_dispatch,
+        "automatic_template_approved": os.getenv(
+            "CAREERHUNTER_GMAIL_AUTO_TEMPLATE_APPROVED", ""
+        ) == "v1",
     }
 
 
@@ -298,3 +316,4 @@ async def send_approved_mail(request: Request) -> JSONResponse:
         "provider_receipt_confirmed": True,
         "recipient_address_disclosed": False, "application_status_changed": False,
     })
+

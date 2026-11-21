@@ -53,15 +53,28 @@ def send_preflight(request: Request) -> dict[str, object]:
             and bool(c.email_public) and bool(c.primary_source_url) and not c.do_not_contact
             for c in contacts
         )
+        application_count = sum(
+            c.category == "job_application_email" and c.research_confidence == "high"
+            and bool(c.email_public) and bool(c.primary_source_url)
+            and not c.do_not_contact and c.status not in {"not_interested", "closed"}
+            for c in contacts
+        )
         contact_store_ready = True
     except Exception:
         approved_count = 0
+        application_count = 0
         contact_store_ready = False
 
     send_enabled = os.getenv("CAREERHUNTER_GMAIL_SEND_ENABLED") == "true"
     writer_present = bool(os.getenv("CAREERHUNTER_GMAIL_SEND_DATABASE_URL", "").strip())
     scope_verified = _check_send_scope()
-    ready = send_enabled and writer_present and scope_verified and contact_store_ready and approved_count > 0
+    template_approved = os.getenv("CAREERHUNTER_GMAIL_AUTO_TEMPLATE_APPROVED") == "v1"
+    automatic_enabled = (
+        os.getenv("CAREERHUNTER_GMAIL_AUTO_OUTREACH_ENABLED") == "true"
+        and template_approved
+    )
+    ready = (send_enabled and writer_present and scope_verified and contact_store_ready
+             and (approved_count > 0 or application_count > 0))
     return {
         "status": "ready" if ready else "blocked",
         "send_enabled": send_enabled,
@@ -69,6 +82,9 @@ def send_preflight(request: Request) -> dict[str, object]:
         "receipt_writer_present": writer_present,
         "contact_store_ready": contact_store_ready,
         "approved_contact_count": approved_count,
-        "automatic_dispatch_enabled": False,
+        "application_contact_count": application_count,
+        "automatic_dispatch_enabled": automatic_enabled,
+        "automatic_template_approved": template_approved,
         "messages_sent": 0,
     }
+

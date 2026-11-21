@@ -39,6 +39,8 @@ class Job(BaseModel):
     verification_status: Literal["ATS_LISTED", "EMPLOYER_CONFIRMED", "REVIEW_REQUIRED",
                                  "NOT_FOUND_AT_LAST_CHECK", "SOURCE_ERROR",
                                  "CLOSED_CONFIRMED"] = "REVIEW_REQUIRED"
+    application_method: Literal["ats", "email"] = "ats"
+    application_contact_id: str | None = None
     verification_observed_at: datetime | None = None
     verification_evidence_url: HttpUrl | None = None
 
@@ -113,7 +115,7 @@ class Contact(BaseModel):
     research_confidence: Literal["unverified", "low", "medium", "high"] = "unverified"
     status: Literal["discovered", "research_needed", "draft_ready", "approved_by_user",
                     "contacted_manually", "connection_accepted", "replied",
-                    "conversation_active", "followup_due", "opportunity_created",
+                    "contacted_automatically", "conversation_active", "followup_due", "opportunity_created",
                     "not_interested", "closed"] = "research_needed"
     message_variant_a: str | None = None
     message_variant_b: str | None = None
@@ -182,4 +184,5 @@ class FollowUp(BaseModel):
     status: Literal["pending", "completed", "cancelled"] = "pending"
     note: str
     completed_at: datetime | None = None
+
 

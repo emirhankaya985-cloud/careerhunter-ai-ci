@@ -162,6 +162,18 @@ def download_cv(language: str, request: Request) -> Response:
     _owner(request)
     if language not in LANGUAGES:
         raise HTTPException(404, "CV language not supported")
+    plain, filename = load_cv_attachment(language)
+    return Response(
+        plain, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"',
+                 "Cache-Control": "no-store, private", "Pragma": "no-cache"},
+    )
+
+
+def load_cv_attachment(language: str) -> tuple[bytes, str]:
+    """Load and integrity-check an encrypted CV for internal send operations."""
+    if language not in LANGUAGES:
+        raise ValueError("unsupported_cv_language")
     key = _key()
     engine = _engine()
     try:
@@ -170,23 +182,19 @@ def download_cv(language: str, request: Request) -> Response:
     finally:
         engine.dispose()
     if row is None:
-        raise HTTPException(404, "CV is not uploaded")
+        raise LookupError("cv_not_uploaded")
     try:
         plain = AESGCM(key).decrypt(
             row["nonce"], row["ciphertext"],
             f"careerhunter-cv-vault:v1:{language}".encode(),
         )
     except InvalidTag:
-        raise HTTPException(503, "CV vault key does not match stored files") from None
+        raise RuntimeError("cv_vault_key_mismatch") from None
     if not hmac.compare_digest(
         hmac.new(key, plain, hashlib.sha256).hexdigest(), row["integrity_mac"]
     ):
-        raise HTTPException(503, "CV vault integrity check failed")
-    return Response(
-        plain, media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="careerhunter_cv_{language}.pdf"',
-                 "Cache-Control": "no-store, private", "Pragma": "no-cache"},
-    )
+        raise RuntimeError("cv_vault_integrity_failed")
+    return plain, f"careerhunter_cv_{language}.pdf"
 
 
 @router.delete("/internal/owner/cv/{language}")
@@ -203,3 +211,4 @@ def delete_cv(language: str, request: Request) -> dict[str, str]:
     finally:
         engine.dispose()
     return {"status": "deleted", "language": language}
+

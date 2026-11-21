@@ -477,6 +477,8 @@ class DatabaseRepository:
                 for field in ("status", "last_contact_at", "last_reply_at", "followup_due_at", "notes"):
                     if getattr(old, field) is not None and (field != "status" or old.status != "research_needed"):
                         setattr(contact, field, getattr(old, field))
+                if old.do_not_contact:
+                    contact.do_not_contact = True
             values = {"payload": contact.model_dump_json(), "updated_at": now}
             if exists:
                 connection.execute(update(contacts).where(
@@ -711,3 +713,4 @@ def import_legacy_sqlite(path: Path | str, target: DatabaseRepository) -> dict[s
     finally:
         connection.close()
     return counts
+

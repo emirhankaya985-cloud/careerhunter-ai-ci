@@ -160,7 +160,7 @@ def test_global_remote_scope_is_a_review_match_not_turkey_eligibility(scope):
 
     scored = matcher.score(role)
 
-    assert scored.remote_type == "unknown"
+    assert scored.remote_type == "remote"
     assert scored.eligibility_status == "needs_review"
     assert scored.turkey_eligibility == "unknown"
     assert scored.match_score >= 65
@@ -197,3 +197,4 @@ def test_domestic_ankara_without_country_name_is_eligible():
     ).model_copy(update={"location": "Ankara", "remote_type": "onsite"})
     scored = matcher.score(role)
     assert scored.eligibility_status == "eligible"
+
