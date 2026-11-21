@@ -98,13 +98,17 @@ def _collect() -> None:
         if not database_url.startswith("postgresql+psycopg://"):
             raise RuntimeError("Collector requires hosted PostgreSQL")
         repo = DatabaseRepository(database_url)
-        stats, _report = Orchestrator(repo=repo).run("jobs", dry_run=False)
+        orchestrator = Orchestrator(repo=repo)
+        stats, _report = orchestrator.run("jobs", dry_run=False)
+        outreach = orchestrator.outreach_result
         result = {
             "status": "success" if stats.jobs_processed > 0 else "empty",
             "jobs_processed": stats.jobs_processed,
             "jobs_new": stats.jobs_new,
             "jobs_closed": stats.jobs_closed,
             "sources_partial": bool(stats.error),
+            "outreach_status": str(outreach.get("status", "unknown")),
+            "outreach_sent": int(outreach.get("sent", 0)),
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
         with _lock:
@@ -582,3 +586,4 @@ def gmail_review_summary(request: Request) -> dict[str, object]:
         from .private_site import _settings
         return read_readonly(max_results=20, ledger_url=_settings()[2]).as_dict()
     return read_readonly(max_results=20).as_dict()
+
