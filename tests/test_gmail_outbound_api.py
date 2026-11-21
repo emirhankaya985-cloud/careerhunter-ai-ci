@@ -72,6 +72,17 @@ def test_owner_only_no_public_outbound_endpoint(owner_mail_client):
     assert post(client, "bogus").status_code == 401
 
 
+@pytest.mark.parametrize(("score", "expected"), [(59, False), (60, True)])
+def test_email_job_fit_requires_score_of_at_least_60(score, expected):
+    job = Job(job_id="demo42", source="ashby", company="Example",
+              title="Junior Python Developer", remote_type="remote",
+              experience_level="junior", match_score=score,
+              verification_status="ATS_LISTED",
+              job_url="https://example.org/demo42",
+              source_url="https://api.ashbyhq.com/posting-api/job-board/example")
+    assert outbound._email_job_fit(job) is expected
+
+
 def test_send_fails_closed_without_scope_or_ledger(owner_mail_client, monkeypatch):
     client = owner_mail_client
     csrf = auth(client)

@@ -92,7 +92,7 @@ def _email_job_fit(job) -> bool:
         "title": job.title, "location": job.location, "remote_type": job.remote_type,
         "description": job.description[:12000], "skills": job.skills_required,
         "score": job.match_score or 0, "level": job.experience_level,
-    }, strong_minimum=75, review_minimum=55)
+    }, strong_minimum=75, review_minimum=60)
     return status in {"strong_match", "review"}
 
 
