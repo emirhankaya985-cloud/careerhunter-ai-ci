@@ -162,7 +162,7 @@ def main() -> int:
                 out.write("### CareerHunter Render collection\n\n")
                 out.write(f"- Processed: {processed}\n- New: {added}\n")
                 out.write("- Target: protected Render PostgreSQL (no CI database credentials)\n")
-                out.write("- Outreach: disabled\n")
+            out.write(f"- Automatic email applications accepted by Gmail: {int(state.get('outreach_sent', 0))}\n")
             return 0
         if status in {"failed", "empty"}:
             raise RuntimeError("Collector ended without confirmed new snapshot: " + str(status))
@@ -176,3 +176,4 @@ if __name__ == "__main__":
     except (RuntimeError, HTTPError, URLError, KeyError, ValueError) as exc:
         print(f"FAIL: {type(exc).__name__}: {exc}", file=sys.stderr)
         sys.exit(1)
+
