@@ -138,6 +138,46 @@ def test_changing_mail_body_does_not_bypass_one_application_per_job_contact():
     assert BASE.key() != replace(BASE, approval_id="candidate-job-002").key()
 
 
+def test_application_mail_attaches_only_valid_pdf_and_stores_gmail_id_and_company_key(
+    tmp_path, monkeypatch,
+):
+    from sqlalchemy import create_engine, select
+    from careerhunter.gmail_send import mail_receipts
+
+    credentials(monkeypatch)
+    attachment = b"%PDF-1.7\nverified-cv\n%%EOF"
+    mail = replace(BASE, approval_id="application-001", attachment_pdf=attachment,
+                   attachment_filename="careerhunter_cv_en.pdf", company_key="a" * 64)
+    captured = []
+
+    def transport(request):
+        if request.url.host == "oauth2.googleapis.com":
+            return httpx.Response(200, json={"access_token": "fake-test-token"})
+        encoded = json.loads(request.content)["raw"]
+        raw = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
+        assert b'filename="careerhunter_cv_en.pdf"' in raw
+        assert b"application/pdf" in raw
+        captured.append(raw)
+        return httpx.Response(200, json={"id": "providerMessage123"})
+
+    db = "sqlite:///" + str(tmp_path / "attachment-ledger.db")
+    with httpx.Client(transport=httpx.MockTransport(transport)) as client:
+        assert send_approved_once(mail, database_url=db, client=client,
+                                  allow_sqlite_tests=True) == "providerMessage123"
+        with pytest.raises(GmailSendError, match="daily_company_limit_reached"):
+            send_approved_once(replace(mail, approval_id="application-002"),
+                               database_url=db, client=client, allow_sqlite_tests=True)
+    engine = create_engine(db)
+    try:
+        with engine.connect() as connection:
+            row = connection.execute(select(mail_receipts)).mappings().one()
+        assert row["provider_message_id"] == "providerMessage123"
+        assert row["company_key"] == "a" * 64
+    finally:
+        engine.dispose()
+    assert len(captured) == 1
+
+
 def test_existing_oauth_client_can_be_reused_but_readonly_token_cannot(
     tmp_path, monkeypatch,
 ):
@@ -164,3 +204,4 @@ def test_existing_oauth_client_can_be_reused_but_readonly_token_cannot(
             client=client, allow_sqlite_tests=True,
         ) == "providerMessage123"
     assert len(seen) == 1
+
