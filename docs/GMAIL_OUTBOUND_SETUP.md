@@ -35,7 +35,8 @@ Sending remains closed until Google grants a fresh `gmail.send` refresh token, a
 
 ## Encrypted owner CV vault
 
-The private dashboard exposes owner-authenticated GET /internal/owner/cv/status,
+The private dashboard exposes an owner-authenticated browser uploader at
+/internal/owner/cv/manage, GET /internal/owner/cv/status,
 GET /internal/owner/cv/csrf, PUT /internal/owner/cv/tr and PUT
 /internal/owner/cv/en (raw application/pdf body), owner-only PDF download routes,
 and CSRF-protected DELETE routes. Files are limited to 10 MiB and are
