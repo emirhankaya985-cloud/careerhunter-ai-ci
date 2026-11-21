@@ -67,6 +67,13 @@ class RuleBasedMatcher:
         # Do not infer global work eligibility from a bare "Remote" label.
         remote = (job.remote_type == "remote" or _contains(title, "remote")
                   or _contains(location, "remote"))
+        # The ATS may encode remote scope only in the title/location while its
+        # normalized remote_type remains unknown. Preserve that source evidence
+        # so downstream application gates do not discard a listed remote role.
+        if job.remote_type == "unknown" and (
+            _contains(title, "remote") or _contains(location, "remote")
+        ):
+            job.remote_type = "remote"
         junior_terms = self.keywords.get("junior", []) + [
             "intern", "apprentice", "trainee", "new graduate"]
         senior_terms = self.keywords.get("senior", []) + ["head of", "vp", "vice president"]
@@ -178,3 +185,4 @@ class RuleBasedMatcher:
             job.gaps.append("Remote çalışma bölgesi Türkiye'yi kapsamıyor")
         job.match_method = "rules"
         return job
+
