@@ -33,6 +33,7 @@ class Orchestrator:
         )
         self.repo = repo or create_repository(default_path)
         self._telegram_candidates = []
+        self.outreach_result: dict[str, object] = {"status": "disabled", "sent": 0}
 
     def run(self, slot: str, dry_run: bool = False) -> tuple[RunStats, Path | None]:
         stats = RunStats(slot=slot, started_at=utc_now())
@@ -139,6 +140,8 @@ class Orchestrator:
             stats.llm_calls = budget.calls if budget else 0
             stats.llm_tokens = budget.tokens if budget else 0
             stats.llm_cost_usd = budget.cost_usd if budget else 0
+        from .automatic_outreach import run_auto_outreach
+        self.outreach_result = run_auto_outreach(self.repo, jobs, dry_run=dry_run)
         archived = 0
         if not dry_run:
             archived = self._archive_remote_fit_jobs(jobs)
@@ -247,3 +250,4 @@ class Orchestrator:
         timestamp = datetime.now(ZoneInfo("Europe/Istanbul")).strftime("%Y%m%d-%H%M%S")
         content = f"# {slot.title()} Intelligence\n\nBu slot Phase 1'de güvenli iskelet olarak hazırdır; doğrulanmamış kişi veya şirket verisi üretmez.\n"
         return write_report(project_path("reports", f"{slot}-{timestamp}.md"), content)
+
