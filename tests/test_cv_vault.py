@@ -1,5 +1,6 @@
 """CV vault is owner-only, encrypted at rest and integrity-checked."""
 import base64
+import re
 from sqlalchemy import select
 from fastapi.testclient import TestClient
 
@@ -27,13 +28,25 @@ def test_cv_vault_upload_read_delete_is_private_and_encrypted(tmp_path, monkeypa
     try:
         with TestClient(app, base_url="https://testserver") as client:
             assert client.get("/internal/owner/cv/status").status_code == 401
+            assert client.get("/internal/owner/cv/manage", follow_redirects=False).status_code == 303
             assert client.post("/login", data={
                 "password": "test-owner-passphrase-123456"
             }).status_code == 200
+            page = client.get("/internal/owner/cv/manage")
+            assert page.status_code == 200
+            assert "İngilizce CV" in page.text and "Türkçe CV" in page.text
+            form_csrf = re.search(r"name='csrf' value='([^']+)'", page.text).group(1)
+            pdf = b"%PDF-1.4\nprivate cv fixture\n%%EOF"
+            form_upload = client.post(
+                "/internal/owner/cv/manage/en", data={"csrf": form_csrf},
+                files={"cv": ("candidate.pdf", pdf, "application/pdf")},
+                headers={"origin": "https://testserver"}, follow_redirects=False,
+            )
+            assert form_upload.status_code == 303
+            assert "status=stored" in form_upload.headers["location"]
             csrf = client.get("/internal/owner/cv/csrf").json()["csrf_token"]
             headers = {"origin": "https://testserver", "x-csrf-token": csrf,
                        "content-type": "application/pdf"}
-            pdf = b"%PDF-1.4\nprivate cv fixture\n%%EOF"
             upload = client.put("/internal/owner/cv/en", content=pdf, headers=headers)
             assert upload.status_code == 200
             assert upload.json()["encrypted_at_rest"] is True
@@ -84,3 +97,4 @@ def test_cv_upload_rejects_invalid_pdf_and_bad_csrf(tmp_path, monkeypatch):
                               headers=headers).status_code == 422
     finally:
         _get_engine.cache_clear()
+
