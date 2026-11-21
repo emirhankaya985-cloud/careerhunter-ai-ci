@@ -35,6 +35,8 @@ mail_receipts = Table(
     Column("claimed_at", String(40), nullable=False),
     Column("status", String(24), nullable=False),
     Column("provider_receipt_hash", String(64)),
+    Column("provider_message_id", String(120)),
+    Column("company_key", String(64)),
 )
 
 
@@ -51,6 +53,9 @@ class ApprovedMail:
     approval_id: str
     approved_by_owner: bool
     reply_to: str | None = None
+    attachment_pdf: bytes | None = None
+    attachment_filename: str | None = None
+    company_key: str | None = None
 
     def validate(self) -> None:
         if self.approved_by_owner is not True:
@@ -67,6 +72,16 @@ class ApprovedMail:
             raise GmailSendError("invalid_body")
         if not isinstance(self.approval_id, str) or not MAIL_KEY.fullmatch(self.approval_id):
             raise GmailSendError("invalid_approval_id")
+        if self.attachment_pdf is not None:
+            if (not isinstance(self.attachment_pdf, bytes) or len(self.attachment_pdf) > 10 * 1024 * 1024
+                    or not self.attachment_pdf.startswith(b"%PDF-")
+                    or b"%%EOF" not in self.attachment_pdf[-2048:]
+                    or self.attachment_filename not in {"careerhunter_cv_en.pdf", "careerhunter_cv_tr.pdf"}):
+                raise GmailSendError("invalid_cv_attachment")
+        elif self.attachment_filename is not None:
+            raise GmailSendError("invalid_cv_attachment")
+        if self.company_key is not None and not re.fullmatch(r"[a-f0-9]{64}", self.company_key):
+            raise GmailSendError("invalid_company_key")
         try:
             evidence = urlsplit(self.contact_evidence_url)
             valid = (evidence.scheme == "https" and bool(evidence.hostname)
@@ -105,6 +120,9 @@ def _send(mail: ApprovedMail, client: httpx.Client | None = None) -> str:
     if mail.reply_to:
         msg["Reply-To"] = mail.reply_to
     msg.set_content(mail.body)
+    if mail.attachment_pdf is not None:
+        msg.add_attachment(mail.attachment_pdf, maintype="application", subtype="pdf",
+                           filename=mail.attachment_filename)
     encoded = base64.urlsafe_b64encode(msg.as_bytes()).decode("ascii").rstrip("=")
     ctx = nullcontext(client) if client is not None else httpx.Client(
         timeout=20, follow_redirects=False, trust_env=False,
@@ -163,6 +181,16 @@ def send_approved_once(
         engine = create_engine(database_url, pool_pre_ping=True)
         try:
             metadata.create_all(engine, tables=[mail_receipts])
+            if backend == "postgresql":
+                with engine.begin() as conn:
+                    conn.execute(text(
+                        "ALTER TABLE careerhunter_approved_mail_receipts "
+                        "ADD COLUMN IF NOT EXISTS provider_message_id VARCHAR(120)"
+                    ))
+                    conn.execute(text(
+                        "ALTER TABLE careerhunter_approved_mail_receipts "
+                        "ADD COLUMN IF NOT EXISTS company_key VARCHAR(64)"
+                    ))
             key = mail.key()
             now = datetime.now(timezone.utc).isoformat()
             today = datetime.now(timezone.utc).date().isoformat()
@@ -175,8 +203,16 @@ def send_approved_once(
                 )).scalar_one()
                 if count >= 5:
                     raise GmailSendError("daily_limit_reached")
+                if mail.company_key:
+                    company_count = conn.execute(select(func.count()).select_from(mail_receipts).where(
+                        mail_receipts.c.company_key == mail.company_key,
+                        mail_receipts.c.claimed_at >= today,
+                    )).scalar_one()
+                    if company_count >= 1:
+                        raise GmailSendError("daily_company_limit_reached")
                 values = {"mail_hash": key, "claimed_at": now,
-                          "status": "pending_review", "provider_receipt_hash": None}
+                          "status": "pending_review", "provider_receipt_hash": None,
+                          "provider_message_id": None, "company_key": mail.company_key}
                 statement = (pg_insert(mail_receipts) if backend == "postgresql"
                              else sqlite_insert(mail_receipts)).values(**values)
                 statement = statement.on_conflict_do_nothing(
@@ -189,7 +225,8 @@ def send_approved_once(
             with engine.begin() as conn:
                 conn.execute(update(mail_receipts).where(
                     mail_receipts.c.mail_hash == key
-                ).values(status="sent", provider_receipt_hash=receipt_hash))
+                ).values(status="sent", provider_receipt_hash=receipt_hash,
+                         provider_message_id=provider_id))
             return provider_id
         finally:
             engine.dispose()
@@ -198,3 +235,4 @@ def send_approved_once(
     except Exception:
         # Preserve the pending_review claim if the database or transport failed.
         raise GmailSendError("ledger_unavailable_or_unconfirmed") from None
+
