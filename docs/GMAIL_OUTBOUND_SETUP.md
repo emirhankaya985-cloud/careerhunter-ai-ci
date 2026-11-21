@@ -1,6 +1,6 @@
 # CareerHunter Gmail outbound — staged integration
 
-This phase adds a tested, **disabled-by-default** sending primitive for verified, owner-approved application emails. It is not a blanket ATS apply bot and it is **not enabled** in production merely by merging the code.
+This phase adds a tested, **disabled-by-default** route for automatic email applications. A scheduled scan may send only when the job's official ATS listing explicitly says to email a CV/application, the listing is active and freshly verified, the candidate match is at least 60, Türkiye eligibility is verified, the encrypted CV for the message language exists, and all one-time owner switches are enabled. The system never submits ATS web forms or guesses an email address. Merging code does not enable sending.
 
 ## Permissions
 
@@ -12,17 +12,16 @@ This phase adds a tested, **disabled-by-default** sending primitive for verified
 
 ## Sending contract
 
-`careerhunter.gmail_send.send_approved_once` takes an `ApprovedMail` with an explicit recipient, subject, body, verified published contact source URL, owner approval ID and true owner approval flag, plus a separately authorized ledger DSN. It refuses missing approval, unverified source URL, disabled feature and missing scope credentials. Each approved message is claimed durably before Gmail is called. There is a quota of five per UTC day. Unconfirmed provider results remain marked for manual review and **must not be blindly retried**. No Gmail response body or address is logged.
+`careerhunter.gmail_send.send_approved_once` takes an `ApprovedMail` with an explicit recipient, subject, body, verified published contact source URL, owner approval ID and true owner approval flag, plus a separately authorized ledger DSN. Automatic outreach is controlled by `CAREERHUNTER_GMAIL_AUTO_OUTREACH_ENABLED=true` and `CAREERHUNTER_GMAIL_AUTO_TEMPLATE_APPROVED=v1`; both must be set by the owner after reviewing the exact message template and uploading the chosen CV. The existing send switch and `gmail.send` OAuth scope are also required. Each message is claimed durably before Gmail is called. The limit is five per UTC day and one per company per day. Unconfirmed provider results remain marked for manual review and **must not be blindly retried**. The Gmail message ID is stored in the private receipt ledger; no Gmail response body or address is logged.
 
 ## Remaining production acceptance gates
 
-1. Owner completes a new OAuth consent for gmail.send. The earlier gmail.readonly grant does not cover sending.
-2. Import a genuine private CV/profile and independently verified employer application contacts. The public profile is an example; a job URL is not an email address.
-3. Build and verify the private owner approval / outbox intake and protected scheduling integration. The current module is intentionally not called by a scheduler.
-4. Run a single owner-approved real test send, verify Gmail's accepted message ID and the recipient's receipt; then enable bounded dispatch.
-5. Confirm Telegram reports and safe failure behavior before claiming fully autonomous operation.
+1. Owner completes a new OAuth consent for `gmail.send`. The earlier `gmail.readonly` grant does not cover sending.
+2. Owner selects and uploads the final English and/or Turkish CV to the encrypted owner vault, and reviews the exact v1 template before setting the approval switch.
+3. At least one qualifying ATS listing must explicitly publish an application email. ATS-only roles remain visible as links and are not submitted.
+4. Run the scheduled scan and confirm its accepted-send count and private Gmail receipt ledger. A provider-accepted message is not proof of delivery, reading, or employer response.
 
-No email is sent by this change.
+No email is sent unless all owner-controlled switches are enabled and a matching encrypted CV and eligible public application email are present.
 
 ## Owner-only send endpoint
 
@@ -32,7 +31,7 @@ The owner can inspect `GET /internal/owner/application-queue` for high-scoring, 
 
 When the authenticated sender account differs from the address printed on the candidate's CV, set `CAREERHUNTER_APPLICATION_REPLY_TO` to the candidate's verified contact address. The Gmail account remains the actual sender; the Reply-To header directs replies to the CV address. The application form must use the same verified contact address. Do not set a forged From header.
 
-The form/API send is currently closed until Google grants a fresh `gmail.send` refresh token and a separate write-capable ledger database URL `CAREERHUNTER_GMAIL_SEND_DATABASE_URL` is configured. The preexisting `GMAIL_READONLY_CLIENT_ID` and `GMAIL_READONLY_CLIENT_SECRET` may be reused as OAuth **client credentials**; only `GMAIL_SEND_REFRESH_TOKEN` must be new. Reusing `GMAIL_READONLY_REFRESH_TOKEN` is not permitted. Set `CAREERHUNTER_GMAIL_SEND_ENABLED=true` only after configuration and an owner-approved sample; unattended dispatch is not yet enabled. A Telegram audit/receipt check remains a production acceptance requirement.
+Sending remains closed until Google grants a fresh `gmail.send` refresh token, a separate write-capable ledger database URL `CAREERHUNTER_GMAIL_SEND_DATABASE_URL` is configured, the final CV is uploaded, and the owner approves the exact template once. The preexisting `GMAIL_READONLY_CLIENT_ID` and `GMAIL_READONLY_CLIENT_SECRET` may be reused as OAuth **client credentials**; only `GMAIL_SEND_REFRESH_TOKEN` must be new. Reusing `GMAIL_READONLY_REFRESH_TOKEN` is not permitted. The scheduled worker checks all switches and gates for every run; it does not ask for per-email confirmation. Keep automatic dispatch disabled until the owner has reviewed the template and selected/uploaded the CV.
 
 ## Encrypted owner CV vault
 
@@ -45,4 +44,7 @@ base64url-encoded, random 32-byte key in CAREERHUNTER_CV_VAULT_KEY; keep the
 key in Render secrets.
 Losing/changing the key makes stored PDFs unrecoverable. Rotate only with an
 explicit decrypt/re-encrypt migration and verified backup. The repository does
-not upload local CV files or contact employers automatically.
+not upload local CV files. Once the owner has approved the exact template and
+enabled automatic dispatch, qualifying explicitly email-based applications
+may be sent automatically under the limits above.
+
