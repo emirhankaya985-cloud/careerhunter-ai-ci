@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from itsdangerous import BadSignature, URLSafeTimedSerializer
-from sqlalchemy import Column, LargeBinary, MetaData, String, Table, create_engine, select
+from sqlalchemy import Column, LargeBinary, MetaData, String, Table, create_engine, inspect, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.engine.url import make_url
@@ -36,6 +36,10 @@ vault = Table(
 )
 LANGUAGES = frozenset({"tr", "en"})
 MAX_CV_BYTES = 10 * 1024 * 1024
+PREFLIGHT_WORKFLOW = (
+    "emirhankaya985-cloud/careerhunter-ai-ci/"
+    ".github/workflows/cv-vault-preflight.yml@refs/heads/main"
+)
 
 
 def _owner(request: Request) -> str:
@@ -81,6 +85,65 @@ def _engine():
         engine.dispose()
         raise HTTPException(503, "CV vault storage is unavailable") from None
     return engine
+
+
+@router.get("/internal/cv-vault/preflight")
+def cv_vault_preflight(request: Request) -> dict[str, object]:
+    """Verify the production writer target without owner login or secret output."""
+    from .scheduled_scan import _require_github_oidc
+
+    _require_github_oidc(
+        request, workflow=PREFLIGHT_WORKFLOW,
+        events=frozenset({"workflow_dispatch", "push"}),
+    )
+    from .application_actions import _writer_url
+
+    writer_matches = False
+    writer_database = "other"
+    vault_table_exists = False
+    writer_reachable = False
+    encryption_key_configured = False
+    try:
+        _key()
+        encryption_key_configured = True
+    except HTTPException:
+        pass
+    try:
+        url = _writer_url()
+        parsed = make_url(url)
+        writer_matches = (
+            parsed.get_backend_name() == "postgresql"
+            and parsed.database == "careerhunter_live"
+            and bool(parsed.host and parsed.host.lower().endswith(".neon.tech"))
+        )
+        if parsed.database in {"careerhunter_live", "careerhunter_ai_db"}:
+            writer_database = parsed.database
+        if writer_matches:
+            engine = create_engine(
+                url, pool_pre_ping=True, pool_size=1, max_overflow=0,
+                connect_args={"connect_timeout": 5},
+            )
+            try:
+                with engine.connect() as connection:
+                    connection.execute(text("SELECT 1"))
+                    writer_reachable = True
+                    vault_table_exists = inspect(connection).has_table(vault.name)
+            finally:
+                engine.dispose()
+    except Exception:
+        # Deliberately return only fixed readiness fields, never driver errors.
+        pass
+    ready = (writer_matches and writer_reachable and vault_table_exists
+             and encryption_key_configured)
+    return {
+        "status": "ready" if ready else "blocked",
+        "writer_database": writer_database,
+        "writer_matches_selected_neon": writer_matches,
+        "writer_reachable": writer_reachable,
+        "vault_table_exists": vault_table_exists,
+        "encryption_key_configured": encryption_key_configured,
+        "cv_upload_performed": False,
+    }
 
 
 def _check_csrf(request: Request, session: str, token: str | None = None) -> None:

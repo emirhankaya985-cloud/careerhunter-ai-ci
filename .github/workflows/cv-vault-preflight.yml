@@ -1,0 +1,50 @@
+name: CareerHunter CV Vault Target Preflight
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/cv-vault-preflight.yml
+      - src/careerhunter/application_actions.py
+      - src/careerhunter/cv_vault.py
+      - src/careerhunter/scheduled_scan.py
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  preflight:
+    if: github.repository == 'emirhankaya985-cloud/careerhunter-ai-ci' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Verify encrypted CV vault configuration without uploading files
+        run: |
+          PYTHONPATH=src python - <<'PY'
+          import json, time
+          from careerhunter.render_scan_client import call, wait_ready
+          wait_ready()
+          result = None
+          for attempt in range(8):
+              try:
+                  result = call('/internal/cv-vault/preflight')
+                  break
+              except RuntimeError as exc:
+                  if 'HTTP 404' not in str(exc) or attempt == 7:
+                      raise
+                  time.sleep(15)
+          if not isinstance(result, dict):
+              raise SystemExit('CV vault preflight returned no result')
+          print(json.dumps(result, sort_keys=True))
+          if result.get('cv_upload_performed') is not False:
+              raise SystemExit('Unsafe CV vault preflight response')
+          if result.get('status') != 'ready':
+              raise SystemExit('CV vault writer target or key is not ready')
+          PY
+
+# The signed GitHub workflow sends no CV files or database credentials.
