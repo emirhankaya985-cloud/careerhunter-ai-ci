@@ -18,6 +18,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from pydantic import BaseModel, Field, HttpUrl
 from sqlalchemy import create_engine
+from sqlalchemy.exc import ArgumentError
 from sqlalchemy.engine.url import make_url
 
 from .database import DatabaseRepository
@@ -81,9 +82,47 @@ def _writer_url() -> str:
         parsed = make_url(db_url)
         if not parsed.host or not parsed.username or not parsed.database:
             raise HTTPException(503, "Invalid CRM database configuration")
+        if os.environ.get("RENDER"):
+            _require_live_neon_writer(parsed)
     else:
         raise HTTPException(503, "Unsupported CRM database configuration")
     return db_url
+
+
+def _require_live_neon_writer(writer_url) -> None:
+    """Refuse production CRM/CV writes unless they target the selected Neon DB.
+
+    The writer URL is an independent Render secret. Compare only its parsed
+    identity with the app's selected Neon URL; never include either URL in an
+    error or diagnostic response.
+    """
+    if os.environ.get("CAREERHUNTER_DB_TARGET", "").strip().lower() != "neon":
+        raise HTTPException(503, "CRM writer must target the selected Neon database")
+    try:
+        from sqlalchemy.engine.url import make_url
+
+        expected = make_url(os.environ.get("CAREERHUNTER_NEON_DATABASE_URL", ""))
+        if (expected.get_backend_name() != "postgresql"
+                or expected.database != "careerhunter_live"
+                or not expected.host
+                or not expected.host.lower().endswith(".neon.tech")):
+            raise ValueError("invalid_selected_target")
+
+        def canonical_host(host: str) -> str:
+            host = host.lower()
+            first, dot, rest = host.partition(".")
+            if first.endswith("-pooler"):
+                first = first[:-7]
+            return first + dot + rest
+
+        if (writer_url.get_backend_name() != "postgresql"
+                or writer_url.database != "careerhunter_live"
+                or not writer_url.host
+                or not writer_url.host.lower().endswith(".neon.tech")
+                or canonical_host(writer_url.host) != canonical_host(expected.host)):
+            raise ValueError("writer_target_mismatch")
+    except (ArgumentError, TypeError, ValueError):
+        raise HTTPException(503, "CRM writer does not match the selected Neon database") from None
 
 
 @router.get("/internal/owner/application-queue")
