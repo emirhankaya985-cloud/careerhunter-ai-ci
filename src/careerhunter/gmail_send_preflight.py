@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 
 import httpx
+from sqlalchemy import create_engine, text
 from fastapi import APIRouter, Request
 
 router = APIRouter()
@@ -38,6 +39,39 @@ def _check_send_scope() -> bool:
         return False
 
 
+def _writer_identity() -> dict[str, object]:
+    """Check the secret writer target without returning its host or credentials."""
+    from .telegram_mail_approval import _writer_url
+
+    engine = create_engine(_writer_url(), pool_pre_ping=True, pool_size=1, max_overflow=0)
+    try:
+        with engine.connect() as connection:
+            row = connection.execute(text(
+                "SELECT current_database() AS database_name, current_user AS role_name, "
+                "to_regclass('public.careerhunter_telegram_mail_approvals') IS NOT NULL "
+                "AS approval_table_exists"
+            )).mappings().one()
+            database_name = str(row["database_name"])
+            role_name = str(row["role_name"])
+            return {
+                "writer_reachable": True,
+                "writer_database_matches": database_name == "careerhunter_live",
+                "writer_database": database_name,
+                "writer_role": role_name,
+                "approval_table_exists": bool(row["approval_table_exists"]),
+            }
+    except Exception:
+        return {
+            "writer_reachable": False,
+            "writer_database_matches": False,
+            "writer_database": None,
+            "writer_role": None,
+            "approval_table_exists": False,
+        }
+    finally:
+        engine.dispose()
+
+
 @router.get("/internal/gmail/send-preflight")
 def send_preflight(request: Request) -> dict[str, object]:
     """Report deployment readiness; this endpoint never sends mail."""
@@ -67,19 +101,22 @@ def send_preflight(request: Request) -> dict[str, object]:
 
     send_enabled = os.getenv("CAREERHUNTER_GMAIL_SEND_ENABLED") == "true"
     writer_present = bool(os.getenv("CAREERHUNTER_GMAIL_SEND_DATABASE_URL", "").strip())
+    writer_identity = _writer_identity()
     scope_verified = _check_send_scope()
     template_approved = os.getenv("CAREERHUNTER_GMAIL_AUTO_TEMPLATE_APPROVED") == "v1"
     automatic_enabled = (
         os.getenv("CAREERHUNTER_GMAIL_AUTO_OUTREACH_ENABLED") == "true"
         and template_approved
     )
-    ready = (send_enabled and writer_present and scope_verified and contact_store_ready
+    ready = (send_enabled and writer_present and writer_identity["writer_database_matches"]
+             and writer_identity["writer_reachable"] and scope_verified and contact_store_ready
              and (approved_count > 0 or application_count > 0))
     return {
         "status": "ready" if ready else "blocked",
         "send_enabled": send_enabled,
         "send_oauth_scope_verified": scope_verified,
         "receipt_writer_present": writer_present,
+        **writer_identity,
         "contact_store_ready": contact_store_ready,
         "approved_contact_count": approved_count,
         "application_contact_count": application_count,
