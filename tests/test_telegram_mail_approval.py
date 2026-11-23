@@ -23,6 +23,9 @@ def mail_client(tmp_path, monkeypatch):
     monkeypatch.setenv("TELEGRAM_WEBHOOK_SECRET", "a" * 40)
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
     monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    engine = create_engine(url)
+    approval.approval_requests.create(engine)
+    engine.dispose()
     with TestClient(app, base_url="https://testserver") as client:
         yield client, db_path
 

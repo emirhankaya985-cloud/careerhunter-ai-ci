@@ -69,7 +69,6 @@ def queue_owner_approval(*, contact, job, subject: str, body: str) -> bool:
     now = datetime.now(timezone.utc)
     engine = create_engine(_writer_url(), pool_pre_ping=True, pool_size=1, max_overflow=0)
     try:
-        _metadata.create_all(engine, tables=[approval_requests])
         with engine.begin() as connection:
             connection.execute(insert(approval_requests).values(
                 request_id=request_id, created_at=now.isoformat(),
@@ -115,7 +114,6 @@ async def claim_telegram_mail(request: Request) -> JSONResponse:
         raise HTTPException(422, "Invalid private chat identity")
     engine = create_engine(_writer_url(), pool_pre_ping=True, pool_size=1, max_overflow=0)
     try:
-        _metadata.create_all(engine, tables=[approval_requests])
         with engine.begin() as connection:
             row = connection.execute(
                 select(approval_requests).where(
