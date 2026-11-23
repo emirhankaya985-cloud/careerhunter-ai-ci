@@ -161,7 +161,7 @@ def main() -> int:
             with open(os.environ.get("GITHUB_STEP_SUMMARY", os.devnull), "a", encoding="utf-8") as out:
                 out.write("### CareerHunter Render collection\n\n")
                 out.write(f"- Processed: {processed}\n- New: {added}\n")
-                out.write("- Target: protected Render PostgreSQL (no CI database credentials)\n")
+                out.write("- Target: active protected production database (durable scan receipt verified)\n")
                 out.write(f"- Automatic email applications accepted by Gmail: {int(state.get('outreach_sent', 0))}\n")
             return 0
         if status in {"failed", "empty"}:
