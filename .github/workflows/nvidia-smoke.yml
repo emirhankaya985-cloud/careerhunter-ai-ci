@@ -2,9 +2,6 @@ name: NVIDIA 120B Connection Smoke
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - .github/workflows/nvidia-smoke.yml
 
 permissions:
   contents: read
