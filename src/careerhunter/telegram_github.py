@@ -13,7 +13,7 @@ import sys
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from .render_scan_client import call
+from .github_operations import telegram_job_digest
 
 _TOKEN = re.compile(r"^[0-9]{6,15}:[A-Za-z0-9_-]{25,}$")
 _CHAT = re.compile(r"^-?[0-9]{4,20}$")
@@ -323,7 +323,7 @@ def main() -> int:
     if os.getenv("GITHUB_RUN_ATTEMPT", "1") != "1":
         print("SKIP: repeat workflow attempt; no duplicate Telegram digest")
         return 0
-    payload = call("/internal/telegram/digest")
+    payload = telegram_job_digest()
     message = digest_message(payload)
     if message is None:
         print("PASS: no new strong matches; no Telegram message needed")

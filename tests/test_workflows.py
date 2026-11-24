@@ -47,17 +47,17 @@ def test_no_linkedin_automation_module_exists():
     assert not any(term in content.lower() for term in forbidden)
 
 
-def test_optional_gmail_and_followup_jobs_are_main_branch_oidc_only():
+def test_optional_gmail_and_followup_jobs_run_in_github_actions():
     mail = (ROOT / ".github/workflows/gmail-review.yml").read_text(encoding="utf-8")
     follow = (ROOT / ".github/workflows/followup-reminder.yml").read_text(encoding="utf-8")
     assert "cron: '50 8 * * *'" in mail
     assert "CAREERHUNTER_GMAIL_REVIEW_ENABLED" not in mail
     assert "workflow_dispatch:" in mail
-    assert "id-token: write" in mail and "id-token: write" in follow
+    assert "id-token: write" not in mail and "id-token: write" not in follow
     assert "refs/heads/main" in mail and "refs/heads/main" in follow
-    assert "GMAIL_READONLY_REFRESH_TOKEN" not in mail
-    assert "GMAIL_READONLY_CLIENT_SECRET" not in mail
-    assert "DATABASE_URL" not in follow
+    assert "GMAIL_READONLY_REFRESH_TOKEN: ${{ secrets.GMAIL_READONLY_REFRESH_TOKEN }}" in mail
+    assert "GMAIL_READONLY_CLIENT_SECRET: ${{ secrets.GMAIL_READONLY_CLIENT_SECRET }}" in mail
+    assert "DATABASE_URL: ${{ secrets.DATABASE_URL }}" in follow
     assert "telegram_mail_review" in mail
     assert "telegram_followups" in follow
 
@@ -82,5 +82,6 @@ def test_gmail_readonly_acceptance_runs_after_oauth_code_changes():
     assert "workflow_dispatch:" in content
     assert "src/careerhunter/gmail_acceptance.py" in content
     assert "src/careerhunter/gmail_reader.py" in content
-    assert "Gmail Readonly" in content and "messages_sent" in content
-    assert "messages_sent" in content and "messages_modified" in content
+    assert "Gmail Readonly" in content
+    assert "GMAIL_READONLY_REFRESH_TOKEN: ${{ secrets.GMAIL_READONLY_REFRESH_TOKEN }}" in content
+    assert "careerhunter.render_scan_client" not in content

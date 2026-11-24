@@ -164,7 +164,8 @@ def test_worker_refuses_to_replace_another_webhook(monkeypatch):
     monkeypatch.setattr(worker, "_telegram", telegram)
     with pytest.raises(worker.WorkerError, match="Another Telegram webhook"):
         worker._configure_webhook(
-            "123456789:" + "x" * 35, url="https://careerhunter.example/webhook",
+            "123456789:" + "x" * 35,
+            url=worker._BASE_URL + "/internal/telegram/mail-approval",
             secret="s" * 40,
         )
     assert calls == ["getWebhookInfo"]
@@ -206,15 +207,16 @@ def test_callback_rejects_other_private_chat(mail_client, monkeypatch):
     assert response.json()["show_alert"] is True
 
 
-def test_workflow_keeps_bot_credentials_in_actions_and_has_exact_oidc_path():
+def test_workflow_polls_telegram_callbacks_from_github_and_keeps_secrets_in_actions():
     from pathlib import Path
 
     workflow = (Path(__file__).parents[1] / ".github/workflows/telegram-mail-approvals.yml")
     content = workflow.read_text(encoding="utf-8")
-    assert "id-token: write" in content
+    assert "id-token: write" not in content
     assert "secrets.TELEGRAM_BOT_TOKEN" in content
     assert "secrets.TELEGRAM_CHAT_ID" in content
     assert "schedule:" in content and "*/5 * * * *" in content
+    assert "getUpdates" in (Path(__file__).parents[1] / "src/careerhunter/telegram_mail_worker.py").read_text()
     assert "TELEGRAM_MAIL_WORKFLOW = REPO + \"/.github/workflows/telegram-mail-approvals.yml@refs/heads/main\"" in (
         (Path(__file__).parents[1] / "src/careerhunter/scheduled_scan.py").read_text(encoding="utf-8")
     )

@@ -12,7 +12,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   preflight:
@@ -23,28 +22,37 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
+      - run: pip install -e '.[web]'
       - name: Verify encrypted CV vault configuration without uploading files
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          CAREERHUNTER_CV_VAULT_KEY: ${{ secrets.CAREERHUNTER_CV_VAULT_KEY }}
         run: |
           PYTHONPATH=src python - <<'PY'
-          import json, time
-          from careerhunter.render_scan_client import call, wait_ready
-          wait_ready()
-          result = None
-          for attempt in range(8):
-              try:
-                  result = call('/internal/cv-vault/preflight')
-                  break
-              except RuntimeError as exc:
-                  if 'HTTP 404' not in str(exc) or attempt == 7:
-                      raise
-                  time.sleep(15)
-          if not isinstance(result, dict):
-              raise SystemExit('CV vault preflight returned no result')
+          import json
+          from sqlalchemy import create_engine, inspect
+          from careerhunter.cv_vault import _key, vault
+          from careerhunter.github_operations import production_database_url
+          key_configured = False
+          try:
+              _key()
+              key_configured = True
+          except Exception:
+              pass
+          engine = create_engine(production_database_url(), pool_pre_ping=True)
+          try:
+              with engine.connect() as connection:
+                  connection.execute(__import__('sqlalchemy').text('SELECT 1'))
+                  table_exists = inspect(connection).has_table(vault.name)
+          finally:
+              engine.dispose()
+          result = {"status": "ready" if table_exists and key_configured else "blocked",
+                    "vault_table_exists": table_exists,
+                    "encryption_key_configured": key_configured,
+                    "cv_upload_performed": False}
           print(json.dumps(result, sort_keys=True))
-          if result.get('cv_upload_performed') is not False:
-              raise SystemExit('Unsafe CV vault preflight response')
-          if result.get('status') != 'ready':
-              raise SystemExit('CV vault writer target or key is not ready')
+          if result["status"] != "ready":
+              raise SystemExit("CV vault table or GitHub encryption secret is not ready")
           PY
 
 # The signed GitHub workflow sends no CV files or database credentials.

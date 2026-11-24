@@ -1,7 +1,7 @@
 """Reminder sender for overdue *manual* job applications.
 
-Reads a small OIDC-protected Render summary and sends only to the configured
-private owner Telegram chat. Never emails, applies, or updates CRM state.
+Reads due followups from PostgreSQL in GitHub Actions and sends only to the
+configured private owner Telegram chat. Never emails, applies, or updates CRM state.
 """
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import html
 import os
 import sys
 
-from .render_scan_client import call
+from .github_operations import due_application_followups
 from .telegram_github import configured, send
 
 
@@ -59,7 +59,7 @@ def main() -> int:
     if not configured():
         print("FAIL: owner Telegram chat not configured")
         return 1
-    payload = call("/internal/followups/due")
+    payload = due_application_followups()
     reminder = prepare(payload)
     if reminder is None:
         print("PASS: zero due application followups")

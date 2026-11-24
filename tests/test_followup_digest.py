@@ -87,7 +87,8 @@ def test_sender_private_message_escapes_untrusted_text():
 def test_zero_due_does_not_send(monkeypatch):
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
     monkeypatch.setattr(sender, "configured", lambda: True)
-    monkeypatch.setattr(sender, "call", lambda url: {"status": "ready", "due_count": 0, "items": []})
+    monkeypatch.setattr(sender, "due_application_followups",
+                        lambda: {"status": "ready", "due_count": 0, "items": []})
     monkeypatch.setattr(sender, "send", lambda *args: pytest.fail("must not send"))
     assert sender.main() == 0
 
@@ -95,7 +96,8 @@ def test_zero_due_does_not_send(monkeypatch):
 def test_retried_job_never_sends(monkeypatch):
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
     monkeypatch.setattr(sender, "configured", lambda: True)
-    monkeypatch.setattr(sender, "call", lambda url: pytest.fail("must not query"))
+    monkeypatch.setattr(sender, "due_application_followups",
+                        lambda: pytest.fail("must not query"))
     assert sender.main() == 0
 
 

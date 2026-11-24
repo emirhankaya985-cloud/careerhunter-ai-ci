@@ -12,7 +12,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   gmail_acceptance:
@@ -24,40 +23,24 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Verify actual Render OAuth and read at most three Gmail messages
+      - name: Verify read-only OAuth and read at most three messages in GitHub Actions
+        env:
+          CAREERHUNTER_GMAIL_READONLY_ENABLED: ${{ secrets.CAREERHUNTER_GMAIL_READONLY_ENABLED }}
+          GMAIL_READONLY_CLIENT_ID: ${{ secrets.GMAIL_READONLY_CLIENT_ID }}
+          GMAIL_READONLY_CLIENT_SECRET: ${{ secrets.GMAIL_READONLY_CLIENT_SECRET }}
+          GMAIL_READONLY_REFRESH_TOKEN: ${{ secrets.GMAIL_READONLY_REFRESH_TOKEN }}
         shell: bash
         run: |
           PYTHONPATH=src python - <<'PY'
-          import time
-          from careerhunter.render_scan_client import call, wait_ready
-          wait_ready()
-          result = None
-          for attempt in range(12):
-              try:
-                  result = call("/internal/gmail/acceptance")
-                  break
-              except RuntimeError as exc:
-                  if "HTTP 404" not in str(exc) or attempt == 11:
-                      raise
-                  time.sleep(15)
-          status = result.get("status") if isinstance(result, dict) else "unavailable"
-          print("Gmail server acceptance state:", status)
-          if status == "missing_render_oauth":
-              # Only allowlisted environment KEY NAMES, never their values or lengths.
-              allowed = {
-                  "GMAIL_READONLY_CLIENT_ID", "GMAIL_READONLY_CLIENT_SECRET",
-                  "GMAIL_READONLY_REFRESH_TOKEN",
-              }
-              missing = result.get("missing_key_names", [])
-              if not isinstance(missing, list) or any(x not in allowed for x in missing):
-                  raise SystemExit("FAIL: invalid safe OAuth diagnostics")
-              print("Missing Render OAuth variable names:", ", ".join(sorted(missing)))
-          if status != "ready":
-              raise SystemExit("FAIL: Render Gmail OAuth or explicit read-only opt-in is incomplete")
-          if (result.get("read_only") is not True
-                  or result.get("messages_sent") != 0
-                  or result.get("messages_modified") != 0):
-              raise SystemExit("FAIL: unsafe Gmail acceptance result")
+          import os
+          from careerhunter.gmail_reader import configured, read_readonly
+          if os.getenv("CAREERHUNTER_GMAIL_READONLY_ENABLED") != "true":
+              raise SystemExit("FAIL: Gmail read-only feature has not been explicitly enabled")
+          if not configured():
+              raise SystemExit("FAIL: GitHub Gmail read-only OAuth secrets are incomplete")
+          result = read_readonly(max_results=3).as_dict()
+          if result.get("status") != "ready" or result.get("automatic_replies_sent") != 0:
+              raise SystemExit("FAIL: bounded Gmail read-only acceptance failed")
           print("PASS: real Gmail readonly scan, bounded to 3 messages")
           print("Messages scanned:", int(result.get("scanned", 0)))
           print("No Gmail message sent, modified or exposed")

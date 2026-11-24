@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: careerhunter-private-mail-review
@@ -24,8 +23,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
-      - name: Inspect Gmail mailbox via OIDC-protected Render service; notify private owner
+      - name: Install mailbox review dependencies
+        run: pip install -e .
+      - name: Inspect Gmail read-only mailbox in GitHub Actions; notify private owner
         env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          CAREERHUNTER_GMAIL_READONLY_ENABLED: ${{ secrets.CAREERHUNTER_GMAIL_READONLY_ENABLED }}
+          CAREERHUNTER_GMAIL_LEDGER_ENABLED: ${{ secrets.CAREERHUNTER_GMAIL_LEDGER_ENABLED }}
+          GMAIL_READONLY_CLIENT_ID: ${{ secrets.GMAIL_READONLY_CLIENT_ID }}
+          GMAIL_READONLY_CLIENT_SECRET: ${{ secrets.GMAIL_READONLY_CLIENT_SECRET }}
+          GMAIL_READONLY_REFRESH_TOKEN: ${{ secrets.GMAIL_READONLY_REFRESH_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: PYTHONPATH=src python -m careerhunter.telegram_mail_review

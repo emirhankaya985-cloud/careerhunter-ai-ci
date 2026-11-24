@@ -15,7 +15,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: careerhunter-production-collector
@@ -30,14 +29,20 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Backfill private personal match scores in Render
+      - name: Backfill private personal match scores directly in PostgreSQL
         env:
           SCAN_MODE: ${{ inputs.mode }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          CAREERHUNTER_PROFILE_JSON: ${{ secrets.CAREERHUNTER_PROFILE_JSON }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          NVIDIA_BASE_URL: https://integrate.api.nvidia.com/v1
+          LLM_PROVIDER: nvidia
         run: |
+          python -m pip install -e .
           if [ "$SCAN_MODE" = "ai" ]; then
-            python src/careerhunter/render_scan_client.py --ai
+            PYTHONPATH=src python -c 'import os; from careerhunter.personal_rescore import enrich_best_existing; print("AI-rescored jobs:", enrich_best_existing(os.environ["DATABASE_URL"]))'
           else
-            python src/careerhunter/render_scan_client.py --rescore
+            PYTHONPATH=src python -c 'import os; from careerhunter.personal_rescore import rescore_existing; print("Jobs rescored:", rescore_existing(os.environ["DATABASE_URL"]))'
           fi
 
   alert_personalize_failure:
