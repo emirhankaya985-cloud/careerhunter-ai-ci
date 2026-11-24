@@ -2,35 +2,35 @@
 
 These instructions apply to every source file, workflow, and document in this repository.
 
-## Architecture: cloud-only, no personal computer dependency
+## Architecture: GitHub-operated, website optional
 
-- **Required production chain:** GitHub Actions (scheduler and signed workflow identity) -> Render (Python application, owner dashboard, collectors) -> Neon (durable PostgreSQL after an accepted cutover) -> Telegram (private reports and failure alerts).
+- **Required production chain:** GitHub Actions (scheduler, collector, scoring, reporting and notifications) -> Neon PostgreSQL (durable production data). Render hosts an optional owner dashboard/viewer only; routine operations must continue when the website is unavailable.
 - The owner's Windows PC, local scripts, home network, public IP, fixed IP, and continuous device uptime must **never** be a requirement for routine operation, deployment, database backups, recovery, or monitoring.
-- Prefer GitHub OIDC -> protected Render API for operational actions. Production database passwords and private application data belong in Render secrets; never pass them through public GitHub Actions logs, public artifacts, prompts, code, or Telegram.
+- GitHub Actions workflows connect directly to the selected production database through Actions Secrets. Use a narrowly scoped production role where the app's upsert/schema needs allow it. Never pass database credentials or private application data through logs, public artifacts, prompts, code, or Telegram.
+- The Render dashboard should use read-only database access wherever possible. It must not be a required proxy, scheduler, collector, or writer for routine production operations.
 - Maintain the **0 TL policy**: no paid plan, paid database, API billing, or upgrade without an explicit cost warning and owner approval. Free-tier limits and expiration dates must be disclosed. Do not silently rely on free compute being continuously available.
 
-## Render -> Neon migration and temporary network access
+## Production database and recovery
 
-1. Confirm that the reviewed GitHub `main` release is **actually live** on Render (inspect deployed commit and live acceptance); GitHub CI success alone is not deployment proof.
-2. Make a **source-read-only, transactionally verified cloud backup** of all CareerHunter data from Render's private PostgreSQL connection to a previously empty dedicated Neon database. Verify all table counts and cryptographic row digests. Never upload private DB credentials or records into GitHub.
-3. Check Neon table inventory, record counts, backup workflow logs, and a genuinely independent recovery/restore test before claiming the backup is disaster-recovery ready. A Neon branch is a useful copy but, without a restore test, not proof of tested recoverability.
-4. **Do not cut over production** while Render remains the only authoritative writer unless a maintenance window, final data reconciliation, authenticated dashboard test, fresh collector write/read test, and Telegram test are confirmed. Preserve the original Render source until rollback and retention are verified.
-5. Remove any temporary personal-PC /32 access allowance from the Render PostgreSQL **database-specific inbound IP rules** once all cloud operations have been verified and it is no longer used. Do not mistake the service's general Inbound IP Restrictions for database ingress. Never use `0.0.0.0/0` for database ingress. Do not include any personal IP in public repository files.
-6. Treat source deletion, untested database cutover, disabling an operational collector, broadening inbound network access, and changing external message sending as high-risk actions requiring explicit approval.
+1. Keep Neon as the authoritative production database after the accepted cutover. GitHub Actions must read and write production data directly through the `DATABASE_URL` Actions secret; never fall back to local SQLite when it is absent.
+2. Preserve the original Render PostgreSQL source until its retention and rollback value have been verified. Reconcile its retained records to Neon when required; never switch production based solely on a green CI run.
+3. Keep backups source-read-only and transactionally verified. Verify table counts and cryptographic row digests, and perform an independent recovery/restore test before claiming disaster-recovery readiness.
+4. Never broaden database ingress to `0.0.0.0/0` or include personal IP addresses in public repository files.
+5. Treat source deletion, untested database cutover, broadening inbound network access, and changing external message sending as high-risk actions requiring explicit approval.
 
 ## Operational acceptance and observability
 
-- Keep the daily collector, recovery guard, four-country ATS health checks, scoring, and Telegram reporting cloud-native, scoped to the intended repository and main branch.
-- Protect privileged Render routes with validated signed GitHub OIDC claims (exact repository ID, workflow reference, branch and allowed event). Do not create anonymous, unauthenticated database or backup endpoints.
-- Never claim **fully autonomous / 100% production** without separately verified CI tests, exact live deployed commit, PostgreSQL integrity, a successful scheduled collection, Telegram acceptance, backup recovery, and failure-handling evidence.
-- Status reports should distinguish: code merged, CI green, Render live, Neon copy verified, restored backup tested, production cutover completed, and independently monitored. Unknown is not success.
+- Keep the scheduled collector, recovery guard, four-country ATS health checks, scoring, and reports in GitHub Actions, scoped to the intended repository and `main` branch.
+- Do not make operational success depend on Render health, deployment status, or website availability. Report website/dashboard health separately from collector/database health.
+- Never claim **fully autonomous / 100% production** without separately verified CI tests, a successful scheduled collection, PostgreSQL integrity, Telegram acceptance, backup recovery, and failure-handling evidence.
+- Status reports should distinguish: code merged, CI green, scheduled collection accepted, database write/read confirmed, Telegram acceptance, backup restore tested, website live, and independently monitored. Unknown is not success.
 - Do not automatically submit applications, send recruitment emails, fabricate resume claims, or change Gmail/LinkedIn data without explicitly authorized and tested workflows.
 - Maintain confidentiality of personal profiles, employer contacts, CVs, private notes and authentication secrets. Logs and dashboard responses should be data-minimal.
 
 ## References
 
-- `docs/RENDER_NEON_CLOUD_ONLY.md` — cloud-only source-preserving copy workflow.
-- `docs/RENDER_DEPLOY_ACCEPTANCE.md` — release identity and live-acceptance proof.
+- `docs/RENDER_NEON_CLOUD_ONLY.md` — historical source-preserving Render-to-Neon copy workflow and rollback notes.
+- `docs/RENDER_DEPLOY_ACCEPTANCE.md` — historical Render release acceptance notes; not a prerequisite for routine operations.
 - `.github/workflows/neon-cloud-backup.yml` — explicit one-time backup workflow.
-- `src/careerhunter/cloud_backup.py` — signed Render-only backup API.
-- `src/careerhunter/pg_transfer.py` — default read-only transfer and verified copy.
+- `src/careerhunter/cloud_backup.py` — signed legacy backup API.
+- `src/careerhunter/pg_transfer.py` — verified database copy and reconciliation helpers.
