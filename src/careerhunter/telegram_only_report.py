@@ -1,7 +1,7 @@
 """Telegram-first daily career updates. No dashboard login is required by owner.
 
 Bot token and private Chat ID are supplied only by GitHub Actions Secrets.
-Only public job metadata is fetched from the OIDC-protected Render service.
+Only public job metadata is read from PostgreSQL by GitHub Actions.
 """
 from __future__ import annotations
 

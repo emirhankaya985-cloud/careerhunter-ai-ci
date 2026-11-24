@@ -62,7 +62,7 @@ def test_main_calls_actual_send_and_requires_ack(monkeypatch):
     data = {"status": "ready", "jobs_new": 5, "strong_count": 0,
             "items": [sample(i, 20) for i in range(5)]}
     monkeypatch.setattr(digest, "configured", lambda: True)
-    monkeypatch.setattr(digest, "call", lambda path: data)
+    monkeypatch.setattr(digest, "telegram_job_digest", lambda: data)
     sent = []
     monkeypatch.setattr(digest, "send", lambda *args: sent.append(args) or True)
     assert digest.main() == 0

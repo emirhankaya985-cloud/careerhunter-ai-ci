@@ -82,8 +82,9 @@ def test_gmail_telegram_aggregate_only():
 
 def test_not_configured_gmail_fails_transparently(monkeypatch):
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
+    monkeypatch.setenv("CAREERHUNTER_GMAIL_READONLY_ENABLED", "true")
     monkeypatch.setattr(sender, "configured", lambda: True)
-    monkeypatch.setattr(sender, "call", lambda path: {"status": "not_configured"})
+    monkeypatch.setattr(sender, "gmail_configured", lambda: False)
     monkeypatch.setattr(sender, "send", lambda message: pytest.fail("no send"))
     assert sender.main() == 1
 
@@ -91,5 +92,5 @@ def test_not_configured_gmail_fails_transparently(monkeypatch):
 def test_retry_does_not_duplicate_telegram(monkeypatch):
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
     monkeypatch.setattr(sender, "configured", lambda: True)
-    monkeypatch.setattr(sender, "call", lambda path: pytest.fail("no fetch"))
+    monkeypatch.setattr(sender, "read_readonly", lambda **kwargs: pytest.fail("no fetch"))
     assert sender.main() == 0

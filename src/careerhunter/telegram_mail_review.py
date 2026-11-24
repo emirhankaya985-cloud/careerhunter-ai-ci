@@ -1,6 +1,6 @@
 """Opt-in, privacy-preserving Gmail review summary to private Telegram.
 
-Only aggregate counts leave the Render service; no Gmail credentials, sender
+Only aggregate counts are sent to Telegram; no Gmail credentials, sender
 addresses, subjects, body text, message IDs or CRM mutation are transferred.
 """
 from __future__ import annotations

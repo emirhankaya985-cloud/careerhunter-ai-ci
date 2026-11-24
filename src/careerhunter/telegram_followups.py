@@ -1,7 +1,7 @@
 """Reminder sender for overdue *manual* job applications.
 
-Reads a small OIDC-protected Render summary and sends only to the configured
-private owner Telegram chat. Never emails, applies, or updates CRM state.
+Reads due followups from PostgreSQL in GitHub Actions and sends only to the
+configured private owner Telegram chat. Never emails, applies, or updates CRM state.
 """
 from __future__ import annotations
 

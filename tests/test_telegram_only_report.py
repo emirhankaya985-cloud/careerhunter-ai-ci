@@ -74,7 +74,7 @@ def test_main_sends_all_batches_and_fails_when_telegram_declines(monkeypatch):
     data = {"status": "ready", "jobs_new": 6,
             "items": [job(i) for i in range(6)]}
     monkeypatch.setattr(report, "configured", lambda: True)
-    monkeypatch.setattr(report, "call", lambda path: data)
+    monkeypatch.setattr(report, "telegram_job_digest", lambda: data)
     monkeypatch.setattr(report.time, "sleep", lambda seconds: None)
     calls = []
     monkeypatch.setattr(report, "send", lambda *args: calls.append(args) or True)
@@ -127,7 +127,8 @@ def test_invalid_daily_limit_falls_back_and_boundaries_are_clamped(monkeypatch):
 def test_rerun_never_replays_previous_daily_digest(monkeypatch):
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
     monkeypatch.setattr(report, "configured", lambda: True)
-    monkeypatch.setattr(report, "call", lambda _path: pytest.fail("API should not be called"))
+    monkeypatch.setattr(report, "telegram_job_digest",
+                        lambda: pytest.fail("database should not be queried"))
     monkeypatch.setattr(report, "send", lambda *_args: pytest.fail("Would duplicate notification"))
     assert report.main() == 0
 

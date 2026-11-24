@@ -164,7 +164,8 @@ def test_worker_refuses_to_replace_another_webhook(monkeypatch):
     monkeypatch.setattr(worker, "_telegram", telegram)
     with pytest.raises(worker.WorkerError, match="Another Telegram webhook"):
         worker._configure_webhook(
-            "123456789:" + "x" * 35, url="https://careerhunter.example/webhook",
+            "123456789:" + "x" * 35,
+            url=worker._BASE_URL + "/internal/telegram/mail-approval",
             secret="s" * 40,
         )
     assert calls == ["getWebhookInfo"]
