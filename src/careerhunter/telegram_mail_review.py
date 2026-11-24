@@ -8,7 +8,8 @@ from __future__ import annotations
 import os
 import sys
 
-from .render_scan_client import call
+from .github_operations import production_database_url
+from .gmail_reader import configured as gmail_configured, read_readonly
 from .telegram_github import configured, send
 
 
@@ -52,7 +53,15 @@ def main() -> int:
     if not configured():
         print("FAIL: private Telegram destination is not ready")
         return 1
-    data = call("/internal/gmail/review-summary")
+    if os.getenv("CAREERHUNTER_GMAIL_READONLY_ENABLED") != "true":
+        print("SKIP: Gmail review is not opted in; mailbox was not read")
+        return 0
+    if not gmail_configured():
+        print("FAIL: Gmail read-only OAuth secrets are missing")
+        return 1
+    ledger_url = (production_database_url()
+                  if os.getenv("CAREERHUNTER_GMAIL_LEDGER_ENABLED") == "true" else None)
+    data = read_readonly(max_results=20, ledger_url=ledger_url).as_dict()
     if data.get("status") != "ready":
         print("FAIL: Gmail readonly monitor not configured or not opted in")
         return 1

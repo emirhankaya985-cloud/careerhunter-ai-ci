@@ -11,7 +11,8 @@ def test_scheduled_personalize_uses_rules_mode_and_shared_lock():
     assert "cron: '50 15 * * 2,5'" in workflow
     assert "SCAN_MODE:" in workflow
     assert 'if [ "$SCAN_MODE" = "ai" ]; then' in workflow
-    assert "python src/careerhunter/render_scan_client.py --rescore" in workflow
+    assert "rescore_existing(os.environ[\"DATABASE_URL\"])" in workflow
+    assert "CAREERHUNTER_PROFILE_JSON: ${{ secrets.CAREERHUNTER_PROFILE_JSON }}" in workflow
     assert "github.event_name == 'schedule'" in workflow
     assert "careerhunter-production-collector" in workflow
     assert "secrets.TELEGRAM_BOT_TOKEN" in workflow

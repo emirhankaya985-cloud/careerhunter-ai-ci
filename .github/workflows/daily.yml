@@ -20,9 +20,9 @@ jobs:
     timeout-minutes: 35
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      CAREERHUNTER_PROFILE_JSON: ${{ secrets.CAREERHUNTER_PROFILE_JSON }}
       NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      TELEGRAM_DELIVERY_MODE: github
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -40,6 +40,10 @@ jobs:
             postgres://*|postgresql://*|postgresql+psycopg://*) ;;
             *) echo "DATABASE_URL must point to PostgreSQL." >&2; exit 1 ;;
           esac
+          if [ -z "${CAREERHUNTER_PROFILE_JSON:-}" ]; then
+            echo "CAREERHUNTER_PROFILE_JSON GitHub Actions secret is required; refusing sample-profile scoring." >&2
+            exit 1
+          fi
       - name: Install collector
         run: pip install -e .
       - name: Scan ATS boards and save results directly to production PostgreSQL

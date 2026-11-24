@@ -10,7 +10,7 @@ import os
 import sys
 import time
 
-from .render_scan_client import call
+from .github_operations import telegram_job_digest
 from .telegram_github import configured, send
 
 CHUNK_SIZE = 5
@@ -197,7 +197,7 @@ def main() -> int:
     if not configured():
         print("FAIL: bot secrets are missing; no Telegram message sent")
         return 1
-    payload = call("/internal/telegram/digest")
+    payload = telegram_job_digest()
     batches = make_messages(payload)
     for index, (message, buttons) in enumerate(batches):
         if index:

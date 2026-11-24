@@ -5,7 +5,7 @@ import html
 import os
 import sys
 
-from .render_scan_client import call
+from .github_operations import telegram_job_digest
 from .telegram_github import configured, send
 
 DASHBOARD = "https://careerhunter-private-dashboard.onrender.com/?view=jobs&sort=fit"
@@ -63,7 +63,7 @@ def main() -> int:
     if not configured():
         print("FAIL: Telegram secrets missing or malformed")
         return 1
-    result = compose(call("/internal/telegram/digest"))
+    result = compose(telegram_job_digest())
     if result is None:
         print("PASS: no new jobs to report")
         return 0

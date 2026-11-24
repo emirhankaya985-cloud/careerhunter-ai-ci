@@ -14,13 +14,14 @@ FIELDS = ("skills", "target_roles", "target_countries", "work_preferences",
 def load_match_profile() -> dict[str, Any]:
     """Use a vetted JSON profile stored only in Render Environment.
 
-    Local development may use the obviously labeled public sample. Production
-    scans must fail rather than quietly return scores for the demo candidate.
+    Local development may use the obviously labeled public sample. Hosted
+    production scans must fail rather than quietly return scores for the demo.
     """
     encoded = os.environ.get("CAREERHUNTER_PROFILE_JSON", "").strip()
     if not encoded:
-        if os.environ.get("RENDER") and not os.environ.get("PYTEST_CURRENT_TEST"):
-            raise RuntimeError("Private candidate profile is not configured")
+        if ((os.environ.get("RENDER") or os.environ.get("GITHUB_ACTIONS") == "true")
+                and not os.environ.get("PYTEST_CURRENT_TEST")):
+            raise RuntimeError("Private candidate profile secret is not configured")
         return load_yaml("profile.yaml")
     if len(encoded) > 12000:
         raise ValueError("Private candidate profile is too large")

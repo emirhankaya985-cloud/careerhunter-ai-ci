@@ -7,11 +7,10 @@ ROOT = Path(__file__).resolve().parents[1] / ".github/workflows"
 
 def test_gmail_acceptance_names_only():
     content = (ROOT / "gmail-acceptance.yml").read_text(encoding="utf-8")
-    assert "Missing Render OAuth variable names:" in content
-    assert 'result.get("missing_key_names", [])' in content
+    assert "GitHub Gmail read-only OAuth secrets are incomplete" in content
     assert "GMAIL_READONLY_REFRESH_TOKEN" in content
-    assert "x not in allowed" in content
-    assert "messages_sent" in content and "messages_modified" in content
+    assert "secrets.GMAIL_READONLY_REFRESH_TOKEN" in content
+    assert "careerhunter.render_scan_client" not in content
 
 
 def test_reconciliation_is_read_only_and_exact_legacy_source():

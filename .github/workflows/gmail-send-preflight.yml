@@ -14,7 +14,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   preflight:
@@ -25,21 +24,26 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
-      - name: Check Render send capability without sending mail
+      - run: pip install -e '.[web]'
+      - name: Check GitHub send capability without sending mail
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          CAREERHUNTER_GMAIL_SEND_DATABASE_URL: ${{ secrets.CAREERHUNTER_GMAIL_SEND_DATABASE_URL || secrets.DATABASE_URL }}
+          CAREERHUNTER_GMAIL_SEND_ENABLED: ${{ secrets.CAREERHUNTER_GMAIL_SEND_ENABLED }}
+          CAREERHUNTER_GMAIL_AUTO_OUTREACH_ENABLED: ${{ secrets.CAREERHUNTER_GMAIL_AUTO_OUTREACH_ENABLED }}
+          CAREERHUNTER_GMAIL_AUTO_TEMPLATE_APPROVED: ${{ secrets.CAREERHUNTER_GMAIL_AUTO_TEMPLATE_APPROVED }}
+          CAREERHUNTER_GMAIL_READONLY_ENABLED: ${{ secrets.CAREERHUNTER_GMAIL_READONLY_ENABLED }}
+          GMAIL_SEND_CLIENT_ID: ${{ secrets.GMAIL_SEND_CLIENT_ID }}
+          GMAIL_SEND_CLIENT_SECRET: ${{ secrets.GMAIL_SEND_CLIENT_SECRET }}
+          GMAIL_SEND_REFRESH_TOKEN: ${{ secrets.GMAIL_SEND_REFRESH_TOKEN }}
+          GMAIL_READONLY_CLIENT_ID: ${{ secrets.GMAIL_READONLY_CLIENT_ID }}
+          GMAIL_READONLY_CLIENT_SECRET: ${{ secrets.GMAIL_READONLY_CLIENT_SECRET }}
+          GMAIL_READONLY_REFRESH_TOKEN: ${{ secrets.GMAIL_READONLY_REFRESH_TOKEN }}
         run: |
           PYTHONPATH=src python - <<'PY'
-          import json, time
-          from careerhunter.render_scan_client import call, wait_ready
-          wait_ready()
-          result = None
-          for attempt in range(8):
-              try:
-                  result = call('/internal/gmail/send-preflight')
-                  break
-              except RuntimeError as exc:
-                  if 'HTTP 404' not in str(exc) or attempt == 7:
-                      raise
-                  time.sleep(15)
+          import json
+          from careerhunter.gmail_send_preflight import build_preflight
+          result = build_preflight()
           print(json.dumps(result, sort_keys=True))
           if result.get('messages_sent') != 0:
               raise SystemExit('Unsafe preflight response')

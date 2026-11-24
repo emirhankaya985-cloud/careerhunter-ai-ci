@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: careerhunter-nvidia-smoke
@@ -23,35 +22,38 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Verify single synthetic NVIDIA Super 120B response on Render
+      - name: Verify one synthetic NVIDIA response directly from GitHub Actions
+        env:
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          LLM_PROVIDER: nvidia
+          LLM_MODEL: nvidia/nemotron-3.5-super-vl-120b-a12b
+          LLM_BASE_URL: https://integrate.api.nvidia.com/v1
         shell: bash
         run: |
+          python -m pip install -e .
           python - <<'PY'
-          import json
-          import sys
-          import time
-          sys.path.insert(0, "src")
-          from careerhunter.render_scan_client import wait_ready, call
-
-          wait_ready()
-          for attempt in range(8):
-              try:
-                  response = call("/internal/nvidia-smoke", method="POST")
-                  break
-              except RuntimeError as exc:
-                  if "HTTP 404" not in str(exc) or attempt == 7:
-                      raise
-                  time.sleep(20)
-          # Output contains only model ID, boolean validation and status; never credentials.
-          print("NVIDIA smoke status:", response["status"])
-          print("Selected model:", response.get("model", "unset"))
-          print("Synthetic JSON validated:", response.get("valid_json", False))
-          if response["status"] != "success":
-              print("Safe error category:", response.get("error_type", response["status"]))
-              print("NVIDIA HTTP code:", response.get("http_status"))
-              print("Official NVIDIA endpoint:", response.get("official_endpoint"))
-              print("API catalog HTTP code:", response.get("models_http_status"))
-              print("120B is listed in catalog:", response.get("model_is_listed"))
-              raise SystemExit("FAIL: NVIDIA 120B inference not verified")
+          from careerhunter.llm.provider import configured_provider, create_provider
+          model = "nvidia/nemotron-3.5-super-vl-120b-a12b"
+          provider = create_provider()
+          if configured_provider() != "nvidia" or provider is None:
+              raise SystemExit("FAIL: NVIDIA GitHub Actions secret is missing")
+          if getattr(provider, "model", "") != model:
+              raise SystemExit("FAIL: NVIDIA model configuration is invalid")
+          try:
+              result = provider.analyze_job(
+                  {"skills": ["Python", "FastAPI"],
+                   "target_roles": ["Junior Python Developer"],
+                   "experience": ["student", "junior"]},
+                  "title=Junior Python Developer\\nlocation=Remote from Turkey\\n"
+                  "description=Python FastAPI internship-friendly role, globally remote.",
+              )
+          except Exception as exc:
+              print("Safe failure category:", type(exc).__name__)
+              raise SystemExit("FAIL: NVIDIA synthetic inference was not validated") from None
+          if not 0 <= result.total <= 100:
+              raise SystemExit("FAIL: NVIDIA response score is invalid")
+          print("NVIDIA smoke status: success")
+          print("Selected model:", model)
+          print("Synthetic JSON validated: true")
           print("PASS: NVIDIA 120B one-call synthetic inference")
           PY

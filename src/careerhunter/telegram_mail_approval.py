@@ -41,7 +41,8 @@ def _webhook_secret() -> str | None:
 
 
 def _writer_url() -> str:
-    url = os.getenv("CAREERHUNTER_GMAIL_SEND_DATABASE_URL", "").strip()
+    url = (os.getenv("CAREERHUNTER_GMAIL_SEND_DATABASE_URL", "").strip()
+           or os.getenv("DATABASE_URL", "").strip())
     if url.startswith("postgres://"):
         return "postgresql+psycopg://" + url[len("postgres://"):]
     if url.startswith("postgresql://"):
@@ -53,7 +54,7 @@ def _writer_url() -> str:
 
 def queue_owner_approval(*, contact, job, subject: str, body: str) -> bool:
     """Persist an exact draft; a secret-bearing GitHub worker delivers it."""
-    if not _webhook_secret():
+    if not _webhook_secret() and os.getenv("GITHUB_ACTIONS") != "true":
         return False
     if len(body) > 2300 or not subject.strip():
         return False
@@ -70,6 +71,7 @@ def queue_owner_approval(*, contact, job, subject: str, body: str) -> bool:
     engine = create_engine(_writer_url(), pool_pre_ping=True, pool_size=1, max_overflow=0)
     try:
         with engine.begin() as connection:
+            _metadata.create_all(connection, tables=[approval_requests])
             connection.execute(insert(approval_requests).values(
                 request_id=request_id, created_at=now.isoformat(),
                 expires_at=(now + timedelta(hours=24)).isoformat(), status="queued",
@@ -226,8 +228,9 @@ def _dispatch(request_id: str, chat_id: str, message_id: int) -> str:
         if os.getenv("CAREERHUNTER_GMAIL_SEND_ENABLED") != "true":
             raise GmailSendError("gmail_send_disabled")
         writer = os.getenv("CAREERHUNTER_GMAIL_SEND_DATABASE_URL", "").strip()
-        from .private_site import _repo
-        repo = _repo()
+        from .database import DatabaseRepository
+        from .github_operations import production_database_url
+        repo = DatabaseRepository(production_database_url())
         job = repo.get_job(pending["source"], pending["job_id"])
         contact = next((c for c in repo.list_contacts(limit=5000)
                         if c.person_id == pending["person_id"]), None)

@@ -72,35 +72,43 @@ def _writer_identity() -> dict[str, object]:
         engine.dispose()
 
 
-@router.get("/internal/gmail/send-preflight")
-def send_preflight(request: Request) -> dict[str, object]:
-    """Report deployment readiness; this endpoint never sends mail."""
-    from .scheduled_scan import _require_github_oidc, MAIL_SEND_PREFLIGHT_WORKFLOW
-    _require_github_oidc(request, workflow=MAIL_SEND_PREFLIGHT_WORKFLOW,
-                          events=frozenset({"workflow_dispatch", "schedule", "push"}))
-    from .private_site import _repo
+def build_preflight() -> dict[str, object]:
+    """Inspect GitHub Actions credentials and records without sending email."""
+    from .database import contacts
+    from .github_operations import production_database_url
+    from .models import Contact
 
+    contact_store_ready = False
+    approved_count = 0
+    application_count = 0
     try:
-        contacts = _repo().list_contacts(limit=5000)
-        approved_count = sum(
-            c.status == "approved_by_user" and c.research_confidence == "high"
-            and bool(c.email_public) and bool(c.primary_source_url) and not c.do_not_contact
-            for c in contacts
-        )
-        application_count = sum(
-            c.category == "job_application_email" and c.research_confidence == "high"
-            and bool(c.email_public) and bool(c.primary_source_url)
-            and not c.do_not_contact and c.status not in {"not_interested", "closed"}
-            for c in contacts
-        )
-        contact_store_ready = True
+        engine = create_engine(production_database_url(), pool_pre_ping=True,
+                               pool_size=1, max_overflow=0)
+        try:
+            with engine.connect() as connection:
+                rows = connection.execute(select(contacts.c.payload).limit(5000)).scalars().all()
+            records = [Contact.model_validate_json(row) for row in rows]
+            approved_count = sum(
+                c.status == "approved_by_user" and c.research_confidence == "high"
+                and bool(c.email_public) and bool(c.primary_source_url) and not c.do_not_contact
+                for c in records
+            )
+            application_count = sum(
+                c.category == "job_application_email" and c.research_confidence == "high"
+                and bool(c.email_public) and bool(c.primary_source_url)
+                and not c.do_not_contact and c.status not in {"not_interested", "closed"}
+                for c in records
+            )
+            contact_store_ready = True
+        finally:
+            engine.dispose()
     except Exception:
-        approved_count = 0
-        application_count = 0
-        contact_store_ready = False
+        # Never expose driver errors or connection strings in workflow logs.
+        pass
 
     send_enabled = os.getenv("CAREERHUNTER_GMAIL_SEND_ENABLED") == "true"
-    writer_present = bool(os.getenv("CAREERHUNTER_GMAIL_SEND_DATABASE_URL", "").strip())
+    writer_present = bool((os.getenv("CAREERHUNTER_GMAIL_SEND_DATABASE_URL", "")
+                           or os.getenv("DATABASE_URL", "")).strip())
     writer_identity = _writer_identity()
     scope_verified = _check_send_scope()
     template_approved = os.getenv("CAREERHUNTER_GMAIL_AUTO_TEMPLATE_APPROVED") == "v1"
@@ -124,4 +132,13 @@ def send_preflight(request: Request) -> dict[str, object]:
         "automatic_template_approved": template_approved,
         "messages_sent": 0,
     }
+
+
+@router.get("/internal/gmail/send-preflight")
+def send_preflight(request: Request) -> dict[str, object]:
+    """Report deployment readiness; this endpoint never sends mail."""
+    from .scheduled_scan import _require_github_oidc, MAIL_SEND_PREFLIGHT_WORKFLOW
+    _require_github_oidc(request, workflow=MAIL_SEND_PREFLIGHT_WORKFLOW,
+                          events=frozenset({"workflow_dispatch", "schedule", "push"}))
+    return build_preflight()
 
