@@ -3,17 +3,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_daily_scheduler_uses_github_oidc_instead_of_database_secrets():
+def test_daily_scheduler_runs_collector_directly_in_github_actions():
     daily = (ROOT / ".github/workflows/daily.yml").read_text(encoding="utf-8")
     assert "workflow_dispatch:" in daily
     assert "cron: '0 * * * *'" in daily
     assert daily.count("cron:") == 1
     assert "concurrency:" in daily
-    assert "id-token: write" in daily
+    assert "id-token: write" not in daily
     assert "contents: read" in daily
-    assert "DATABASE_URL" not in daily
-    assert "secrets." not in daily
-    assert "python src/careerhunter/render_scan_client.py" in daily
+    assert "DATABASE_URL: ${{ secrets.DATABASE_URL }}" in daily
+    assert "python -m careerhunter run --slot jobs" in daily
+    assert "render_scan_client.py" not in daily
     assert "git push" not in daily
 
 
