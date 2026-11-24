@@ -116,9 +116,22 @@ def _message(profile: dict, job: Job, language: str) -> tuple[str, str]:
 
 def run_auto_outreach(repo, jobs: list[Job], *, dry_run: bool = False) -> dict[str, object]:
     """Discover explicit email application routes; send only under all gates."""
+    template_approved = os.getenv("CAREERHUNTER_GMAIL_AUTO_TEMPLATE_APPROVED") == TEMPLATE_VERSION
+    automatic_enabled = (
+        os.getenv("CAREERHUNTER_GMAIL_AUTO_OUTREACH_ENABLED") == "true"
+        and template_approved
+    )
     result: dict[str, object] = {
         "status": "disabled", "discovered_contacts": 0, "eligible_jobs": 0,
         "sent": 0, "failed": 0, "skipped": 0,
+        "automatic_dispatch_enabled": automatic_enabled,
+        "template_approved": template_approved,
+        "gmail_send_enabled": os.getenv("CAREERHUNTER_GMAIL_SEND_ENABLED") == "true",
+        "receipt_writer_configured": bool(
+            os.getenv("CAREERHUNTER_GMAIL_SEND_DATABASE_URL", "").strip()
+        ),
+        "candidate_profile_available": False,
+        "approved_cv_available": False,
     }
     candidates: list[tuple[Job, Contact]] = []
     touched_jobs: list[Job] = []
@@ -172,6 +185,7 @@ def run_auto_outreach(repo, jobs: list[Job], *, dry_run: bool = False) -> dict[s
         result["status"] = "private_profile_missing"
         result["skipped"] = len(candidates)
         return result
+    result["candidate_profile_available"] = True
 
     seen_company: set[str] = set()
     for job, contact in sorted(candidates, key=lambda item: item[0].match_score or 0, reverse=True):
@@ -188,6 +202,7 @@ def run_auto_outreach(repo, jobs: list[Job], *, dry_run: bool = False) -> dict[s
             result["status"] = "approved_cv_missing_or_unavailable"
             result["skipped"] = len(candidates) - int(result["sent"])
             return result
+        result["approved_cv_available"] = True
         approval_id = hashlib.sha256(
             "\0".join((job.source, job.job_id, contact.person_id)).encode("utf-8")
         ).hexdigest()[:40]

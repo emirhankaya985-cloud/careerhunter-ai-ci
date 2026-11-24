@@ -163,6 +163,11 @@ def main() -> int:
                 out.write(f"- Processed: {processed}\n- New: {added}\n")
                 out.write("- Target: active protected production database (durable scan receipt verified)\n")
                 out.write(f"- Automatic email applications accepted by Gmail: {int(state.get('outreach_sent', 0))}\n")
+                out.write(f"- Email application candidates: {int(state.get('outreach_eligible_jobs', 0))}\n")
+                out.write(f"- Automatic email dispatch enabled: {bool(state.get('outreach_automatic_dispatch_enabled', False))}\n")
+                out.write(f"- Gmail send gate enabled: {bool(state.get('outreach_gmail_send_enabled', False))}\n")
+                out.write(f"- Owner template approved: {bool(state.get('outreach_template_approved', False))}\n")
+                out.write(f"- Encrypted approved CV available: {bool(state.get('outreach_approved_cv_available', False))}\n")
             return 0
         if status in {"failed", "empty"}:
             raise RuntimeError("Collector ended without confirmed new snapshot: " + str(status))

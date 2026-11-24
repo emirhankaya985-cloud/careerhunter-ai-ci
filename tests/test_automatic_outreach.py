@@ -81,6 +81,9 @@ def test_disabled_global_switch_discovers_but_does_not_send(monkeypatch):
     repo = Repo()
     result = run_auto_outreach(repo, [job()])
     assert result["status"] == "automatic_dispatch_disabled"
+    assert result["automatic_dispatch_enabled"] is False
+    assert result["gmail_send_enabled"] is True
+    assert result["receipt_writer_configured"] is False
     assert result["discovered_contacts"] == 1
     assert repo.contacts
     assert not repo.opportunities
@@ -141,3 +144,18 @@ def test_missing_cv_blocks_without_attempting_send(monkeypatch):
     assert result["status"] == "approved_cv_missing_or_unavailable"
     assert result["sent"] == 0
 
+
+def test_outreach_readiness_reports_switches_without_enabling_dispatch(monkeypatch):
+    monkeypatch.delenv("CAREERHUNTER_GMAIL_AUTO_OUTREACH_ENABLED", raising=False)
+    monkeypatch.delenv("CAREERHUNTER_GMAIL_AUTO_TEMPLATE_APPROVED", raising=False)
+    monkeypatch.delenv("CAREERHUNTER_GMAIL_SEND_ENABLED", raising=False)
+    monkeypatch.delenv("CAREERHUNTER_GMAIL_SEND_DATABASE_URL", raising=False)
+    result = run_auto_outreach(Repo(), [job()])
+    assert result["status"] == "automatic_dispatch_disabled"
+    assert result["automatic_dispatch_enabled"] is False
+    assert result["template_approved"] is False
+    assert result["gmail_send_enabled"] is False
+    assert result["receipt_writer_configured"] is False
+    assert result["candidate_profile_available"] is False
+    assert result["approved_cv_available"] is False
+    assert result["sent"] == 0

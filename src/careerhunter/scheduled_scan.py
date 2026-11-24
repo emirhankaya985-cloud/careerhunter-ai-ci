@@ -109,6 +109,22 @@ def _collect() -> None:
             "sources_partial": bool(stats.error),
             "outreach_status": str(outreach.get("status", "unknown")),
             "outreach_sent": int(outreach.get("sent", 0)),
+            "outreach_discovered_contacts": int(outreach.get("discovered_contacts", 0)),
+            "outreach_eligible_jobs": int(outreach.get("eligible_jobs", 0)),
+            "outreach_automatic_dispatch_enabled": bool(
+                outreach.get("automatic_dispatch_enabled", False)
+            ),
+            "outreach_template_approved": bool(outreach.get("template_approved", False)),
+            "outreach_gmail_send_enabled": bool(outreach.get("gmail_send_enabled", False)),
+            "outreach_receipt_writer_configured": bool(
+                outreach.get("receipt_writer_configured", False)
+            ),
+            "outreach_candidate_profile_available": bool(
+                outreach.get("candidate_profile_available", False)
+            ),
+            "outreach_approved_cv_available": bool(
+                outreach.get("approved_cv_available", False)
+            ),
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
         with _lock:
