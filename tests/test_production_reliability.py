@@ -110,15 +110,10 @@ def test_job_collection_refuses_success_when_all_sources_fail(tmp_path, monkeypa
     assert repo.list_jobs(active_only=False) == []
 
 
-
-def test_daily_workflow_runs_in_render_and_rejects_unauthenticated_requests():
+def test_daily_workflow_runs_collector_directly_and_website_is_optional():
     daily = (Path(__file__).parents[1] / ".github/workflows/daily.yml").read_text()
-    runner = (Path(__file__).parents[1] /
-              "src/careerhunter/render_scan_client.py").read_text()
-    assert "id-token: write" in daily
-    assert "DATABASE_URL" not in daily
-    assert "ACTIONS_ID_TOKEN_REQUEST_TOKEN" in runner
-    assert '"/internal/scan/status"' in runner
-    assert '"/readyz"' in runner
-    assert "Production collector returned zero jobs" in runner
-    assert "sys.exit(1)" in runner
+    assert "id-token: write" not in daily
+    assert "DATABASE_URL: ${{ secrets.DATABASE_URL }}" in daily
+    assert "python -m careerhunter run --slot jobs" in daily
+    assert "render_scan_client.py" not in daily
+    assert "refusing local SQLite fallback" in daily

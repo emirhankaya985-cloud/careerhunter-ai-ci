@@ -1,7 +1,7 @@
 name: Hourly Career Intelligence
 
-# Scheduled job runner needs no Bot token and no PostgreSQL password.
-# Hourly discovery; UTC schedule runs at minute 00 of every hour.
+# GitHub Actions owns the schedule and runs the collector directly.
+# The website is an optional viewer; collection does not call Render.
 on:
   workflow_dispatch:
   schedule:
@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: careerhunter-production-collector
@@ -19,11 +18,29 @@ jobs:
   collect:
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Collect real job postings in Render PostgreSQL
+          cache: pip
+      - name: Require the production PostgreSQL secret
         shell: bash
-        run: python src/careerhunter/render_scan_client.py
+        run: |
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "DATABASE_URL GitHub Actions secret is required; refusing local SQLite fallback." >&2
+            exit 1
+          fi
+          case "$DATABASE_URL" in
+            postgres://*|postgresql://*|postgresql+psycopg://*) ;;
+            *) echo "DATABASE_URL must point to PostgreSQL." >&2; exit 1 ;;
+          esac
+      - name: Install collector
+        run: pip install -e .
+      - name: Scan ATS boards and save results directly to production PostgreSQL
+        run: python -m careerhunter run --slot jobs
