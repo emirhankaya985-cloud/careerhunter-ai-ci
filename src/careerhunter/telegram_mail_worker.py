@@ -141,7 +141,6 @@ def _claim_queued(chat_id: str) -> dict | None:
 
 
 def _finish_delivery(request_id: str, outcome: str, message_id: int | None = None) -> None:
-    from datetime import datetime, timezone
     engine = create_engine(_writer_url(), pool_pre_ping=True, pool_size=1, max_overflow=0)
     try:
         with engine.begin() as connection:

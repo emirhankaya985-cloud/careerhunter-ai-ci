@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 
 import httpx
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, select, text
 from fastapi import APIRouter, Request
 
 router = APIRouter()
