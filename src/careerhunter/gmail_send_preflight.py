@@ -43,8 +43,9 @@ def _writer_identity() -> dict[str, object]:
     """Check the secret writer target without returning its host or credentials."""
     from .telegram_mail_approval import _writer_url
 
-    engine = create_engine(_writer_url(), pool_pre_ping=True, pool_size=1, max_overflow=0)
+    engine = None
     try:
+        engine = create_engine(_writer_url(), pool_pre_ping=True, pool_size=1, max_overflow=0)
         with engine.connect() as connection:
             row = connection.execute(text(
                 "SELECT current_database() AS database_name, current_user AS role_name, "
@@ -69,7 +70,8 @@ def _writer_identity() -> dict[str, object]:
             "approval_table_exists": False,
         }
     finally:
-        engine.dispose()
+        if engine is not None:
+            engine.dispose()
 
 
 def build_preflight() -> dict[str, object]:

@@ -39,6 +39,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+      - run: pip install -e .
       - name: Verify the exact private Telegram chat or acknowledge owner /start
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

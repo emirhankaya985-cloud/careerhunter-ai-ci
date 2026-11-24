@@ -23,6 +23,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - run: pip install -e .
       - name: Verify read-only OAuth and read at most three messages in GitHub Actions
         env:
           CAREERHUNTER_GMAIL_READONLY_ENABLED: ${{ secrets.CAREERHUNTER_GMAIL_READONLY_ENABLED }}
