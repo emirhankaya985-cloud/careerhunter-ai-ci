@@ -4,6 +4,7 @@ import os
 import re
 import json
 import time
+import hashlib
 
 import httpx
 
@@ -29,7 +30,8 @@ def _safe_text(value: str, limit: int = 300) -> str:
     return value[:limit]
 
 
-def publish(message: str, *, title: str, priority: int = 3) -> bool:
+def publish(message: str, *, title: str, priority: int = 3,
+            sequence_id: str | None = None) -> bool:
     """Publish an aggregate-only notification; return False when not configured."""
     topic = configured_topic()
     acceptance_file = os.getenv("NTFY_ACCEPTANCE_FILE", "").strip()
@@ -41,7 +43,9 @@ def publish(message: str, *, title: str, priority: int = 3) -> bool:
                "priority": priority, "tags": ["briefcase"]}
     for attempt in range(3):
         try:
-            response = httpx.post("https://ntfy.sh/", json=payload, timeout=15)
+            headers = {"X-Sequence-ID": sequence_id} if sequence_id else None
+            response = httpx.post("https://ntfy.sh/", json=payload,
+                                  headers=headers, timeout=15)
             response.raise_for_status()
             if acceptance_file:
                 _write_acceptance(acceptance_file, {"configured": True, "accepted": True, "http_status": response.status_code})
@@ -67,7 +71,12 @@ def _write_acceptance(path: str, payload: dict) -> None:
 
 
 def publish_run(stats: RunStats) -> bool:
+    # ntfy replaces a message carrying the same sequence ID, so retries of this
+    # exact run do not create duplicate notifications on subscribed clients.
+    run_key = f"{stats.slot}:{stats.started_at.isoformat()}"
+    sequence_id = hashlib.sha256(run_key.encode("utf-8")).hexdigest()
     if stats.status == "success":
+        partial = bool(stats.error)
         message = (
             f"Slot: {stats.slot}\n"
             f"İşlenen ilan: {stats.jobs_processed}\n"
@@ -75,10 +84,19 @@ def publish_run(stats: RunStats) -> bool:
             f"Kapanan ilan: {stats.jobs_closed}\n"
             f"LLM çağrısı: {stats.llm_calls}"
         )
-        return publish(message, title="CareerHunter günlük tarama tamamlandı")
+        if partial:
+            message += "\nKaynak durumu: kısmi tarama\n" + _safe_text(stats.error or "")
+        return publish(
+            message,
+            title=("CareerHunter tarama kısmi" if partial
+                   else "CareerHunter günlük tarama tamamlandı"),
+            priority=4 if partial else 3,
+            sequence_id=sequence_id,
+        )
     error = _safe_text(stats.error or "Bilinmeyen hata")
     return publish(
         f"Slot: {stats.slot}\nHata: {error}",
         title="CareerHunter çalışması başarısız",
         priority=4,
+        sequence_id=sequence_id,
     )
