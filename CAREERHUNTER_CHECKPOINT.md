@@ -1,39 +1,37 @@
 # CareerHunter AI Checkpoint
 
-Last updated: 2026-11-26 (Europe/Istanbul)
+Updated: 2026-11-26 (Europe/Istanbul)
 Repository: `emirhankaya985-cloud/careerhunter-ai-ci`
-Production main SHA: `637c83507dae3c9856f0d9c49af31e9a214fe6de`
 
-## Verified in this continuation
+## Verified production state
 
-- GitHub access recovered. The Actions `DATABASE_URL` secret was updated on 2026-11-25 19:41 UTC to the `careerhunter_actions` role on the new Neon target. Its value was not printed.
-- Manual Hourly Career Intelligence run [#45687710676](https://github.com/emirhankaya985-cloud/careerhunter-ai-ci/actions/runs/45687710676) completed successfully at 19:44 UTC. It processed and saved 2,726 jobs. Neon SQL on project `hidden-fog-42701810`, branch `br-autumn-cell-bb1fk9d1`, database `careerhunter_live`, returned 2,726 `jobs`, 1 `runs`, and 0 CV rows. Database has unique `(source, job_id)` and `(source, job_url)` constraints.
-- New Neon project is `careerhunter-ai-free`, project ID `hidden-fog-42701810`; default branch is ready. Core schema version is 4. The old Render PostgreSQL is not used for this scan.
-- Render `/healthz` and `/readyz` returned `ok` and `ready`; `/versionz` returned `637c83507dae3c9856f0d9c49af31e9a214fe6de`.
-- The Render `CAREERHUNTER_CRM_DATABASE_URL` value was corrected to the restricted `careerhunter_cv_writer` role on `careerhunter_live`. Render `/internal/owner/cv/status` then returned `ready`; its readiness included a valid encryption key and reachable vault. The vault still has 0 rows because PDFs have not been uploaded.
-- The new database contains `careerhunter_cv_vault`; `careerhunter_cv_writer` can SELECT/INSERT the vault and cannot SELECT `jobs`.
-- GitHub secret `NTFY_TOPIC` is absent; NTFY delivery is disabled until the user supplies the intended topic. No other NTFY destination was created.
-- Gmail preflight #45684257217 succeeded without sending mail. No self-test or employer email was sent in this continuation.
-- Created the new Neon `careerhunter_mail_sender` login role and applied idempotent Telegram approval / Gmail receipt table migrations. It has SELECT/INSERT/UPDATE only on those two tables; it cannot read `jobs` or the CV vault.
-- GitHub `CAREERHUNTER_GMAIL_SEND_DATABASE_URL` was updated to the new restricted role. Worker run [#45712865126](https://github.com/emirhankaya985-cloud/careerhunter-ai-ci/actions/runs/45712865126) succeeded against it with an empty queue; Neon shows 0 approvals and 0 receipts. Render's matching `CAREERHUNTER_GMAIL_SEND_DATABASE_URL` still needs user update, so the app queue and worker are not yet proven on the same database.
-- No natural hourly run has occurred after the target change. Cron `0 * * * *` remains configured; the one successful new-target scan was a manual dispatch.
-- NTFY is disabled: repository `NTFY_TOPIC` secret is absent.
+- Neon project `careerhunter-ai-free` (`hidden-fog-42701810`), branch `br-autumn-cell-bb1fk9d1`, database `careerhunter_live` is ready and remains the active collector target.
+- Latest successful Hourly Career Intelligence run after merge: [#45714135543](https://github.com/emirhankaya985-cloud/careerhunter-ai-ci/actions/runs/45714135543), manual dispatch on main SHA `4af28e6fc8b1f8aecf9c0ea00d294da74619e8d0`.
+- Latest successful manual production scan: [#45722381870](https://github.com/emirhankaya985-cloud/careerhunter-ai-ci/actions/runs/45722381870), completed in 2m32s on `main`; required PostgreSQL and private profile checks passed.
+- Neon SQL after that run: 3,360 jobs, 56 jobs scored 60+, and 3,360 distinct `(source, job_id)` keys. The prior pre-run count was 3,118; the new scan completed without a database or profile configuration error.
+- Hourly schedule remains `0 * * * *`. No natural scheduled run after the Neon cutover has yet been observed; the successful post-merge run was manual.
+- Post-merge GitHub `Tests` and `Controlled E2E and Live ATS Health` checks passed; the post-merge collector run also succeeded.
+- PR #77 merged as `4af28e6fc8b1f8aecf9c0ea00d294da74619e8d0`. It reports partial source failures in NTFY alerts and uses deterministic per-run ntfy sequence IDs to deduplicate retries.
+- Render mail-writer environment now targets the new Neon `careerhunter_live` using the limited mail role. Environment deploy is Live at the same main commit. `/healthz`=`ok`, `/readyz`=`ready`, `/versionz`=`4af28e6fc8b1f8aecf9c0ea00d294da74619e8d0`.
+- Neon role audit: `careerhunter_actions`, `careerhunter_cv_writer`, and `careerhunter_mail_sender` are non-admin login roles (no superuser, createdb, or createrole).
+- CV upload is canceled by the owner. Do not ask for upload, request browser file permissions, or block automation on the vault. Both PDFs remain local and were not uploaded or modified.
+- The GitHub Actions secret `CAREERHUNTER_PROFILE_JSON` was updated privately from skills and experience explicitly stated in the supplied CVs. It contains no contact details or PDF content. `daily.yml` and `personalize.yml` consume it; the successful run above confirms the production collector accepted the profile. Matching remains rule-based and does not require the CV vault.
+- Gmail capability preflight [#45718928243](https://github.com/emirhankaya985-cloud/careerhunter-ai-ci/actions/runs/45718928243) verified the send OAuth scope and `careerhunter_mail_sender` connectivity to `careerhunter_live`; `approval_table_exists=true`, `messages_sent=0`, automatic dispatch remains off.
+- Telegram mail worker [#45718932859](https://github.com/emirhankaya985-cloud/careerhunter-ai-ci/actions/runs/45718932859) succeeded after the Neon credential was corrected; SQL immediately before the run showed 0 pending approvals and 0 receipts. No email was sent.
+- NTFY delivery remains disabled until the owner adds the intended `NTFY_TOPIC` GitHub Actions secret.
+- PR #76 remains open and unmerged: its delete route removes archived CV history too. Do not merge until deletion preserves history or the data-loss behavior is explicitly changed and retested. PR #75 is stale checkpoint-only.
+- Old Render PostgreSQL remains suspended; no old data migration was claimed or attempted.
 
-## Local changes not yet pushed
+## Matching limitations
 
-- `src/careerhunter/notifications/ntfy.py`: identifies partial source failures in successful run alerts and adds a deterministic `X-Sequence-ID` so ntfy updates the same run notification on retry.
-- `tests/test_ntfy.py`: verifies partial scan reporting and stable run sequence IDs.
-- Focused checks passed: `pytest -q tests/test_ntfy.py` (4 passed), `ruff check src/careerhunter/notifications/ntfy.py tests/test_ntfy.py`.
-- Full suite, commit, push, PR, and CI for these changes are still pending.
+- Rule matcher currently scores declared skills, target role, job seniority, location/eligibility, and freshness. It does not score education, candidate language, actual experience duration, or produce per-dimension breakdowns.
+- The private production profile is intentionally not printed, committed, or logged. Do not replace it with the public sample profile.
+- User screenshot showed `Invalid request origin` on a panel request. Origin/CSRF protections were not weakened. The exact route was not readable from the screenshot; because CV upload was canceled, no upload retry was made.
 
-## Remaining work
+## Next actions
 
-1. Restore the Codex-Brave browser control; then upload the local English and Turkish PDFs and verify encrypted storage plus byte-for-byte readback without exposing contents.
-2. Review `CAREERHUNTER_PROFILE_JSON` privately before treating score output as candidate-accurate. The current rule matcher scores skills, role, seniority, freshness, and location/eligibility; education, language, and actual candidate experience are not scored. Public `config/profile.yaml` is only a sample.
-3. Confirm the next naturally scheduled hourly run writes to the new Neon target.
-4. Update Render `CAREERHUNTER_GMAIL_SEND_DATABASE_URL` to new Neon role `careerhunter_mail_sender` so Render queue writes and Actions worker reads share the same database.
-5. User must add the intended `NTFY_TOPIC` secret if NTFY reports are required.
-6. Verify the owner-only Gmail self-test only after CV storage/readback is verified. Do not send employer applications without recipient, template, and automation approval.
-7. PR #76 is open and has successful CI, but its change includes a CV deletion path that also deletes history; review that data-loss behavior before any merge. PR #75 is a stale checkpoint-only PR.
+1. Observe the next natural hourly scan and verify its Neon writes.
+2. Add `NTFY_TOPIC` only if the owner wants NTFY delivery.
+3. Improve evidence-based profile dimensions and score breakdown without inferring uncertain CV fields.
 
-See [`USER_ACTION_REQUIRED.md`](USER_ACTION_REQUIRED.md) for the single remaining user setup item and direct links.
+See [`USER_ACTION_REQUIRED.md`](USER_ACTION_REQUIRED.md) for direct links and the required manual steps. No CV, secret, or token values are stored in this checkpoint.
