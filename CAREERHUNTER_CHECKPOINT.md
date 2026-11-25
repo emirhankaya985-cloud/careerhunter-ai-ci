@@ -27,12 +27,13 @@ Repository: `emirhankaya985-cloud/careerhunter-ai-ci`
 - Rule matcher currently scores declared skills, target role, job seniority, location/eligibility, and freshness. It does not score education, candidate language, actual experience duration, or produce per-dimension breakdowns.
 - The private production profile is intentionally not printed, committed, or logged. Do not replace it with the public sample profile.
 - User screenshot showed `Invalid request origin` on a panel request. Origin/CSRF protections were not weakened. The exact route was not readable from the screenshot; because CV upload was canceled, no upload retry was made.
-- Owner explicitly approved CV-less automatic email outreach using a localized application message. Implementation is pending review/merge: Türkiye → Turkish; United States/UK/Australia → English; Germany → German. Unknown/ambiguous languages are skipped; email routes that require a CV are excluded. Existing 60+ score, verified eligibility, explicit email-application evidence, duplicate, daily 5, and one-per-company limits remain required. Do not enable the switches until the code is merged and tested; then verify a production run without exposing recipients or message content.
+- Owner explicitly approved CV-less automatic email outreach using localized messages. PRs #79 and #80 are merged; full suite passed (501 passed, 2 skipped), with CI test, verify, and PostgreSQL integration checks green. Türkiye → Turkish; United States/UK/Australia → English; Germany → German. Unknown/ambiguous languages are skipped; instructions requiring a CV are excluded. 60+ score, verified eligibility, explicit ATS email-application evidence, idempotency, daily 5, and one-per-company/day limits remain enforced.
+- GitHub Actions send/automatic/template gates are enabled for template v2. Gmail capability preflight [#45725040098](https://github.com/emirhankaya985-cloud/careerhunter-ai-ci/actions/runs/45725040098) completed without sending; the database had 0 verified application email contacts at that check, so no employer messages were sent. The next collector run will send only if it finds eligible contacts.
 
 ## Next actions
 
 1. Observe the next natural hourly scan and verify its Neon writes.
-2. Enable the approved auto-email secrets only after the CV-less and language-specific behavior is merged and verified.
+2. Observe whether the next collector run finds an eligible email-application address; no message is sent without that listing evidence.
 3. Add `NTFY_TOPIC` only if the owner wants NTFY delivery.
 4. Improve evidence-based profile dimensions and score breakdown without inferring uncertain CV fields.
 
