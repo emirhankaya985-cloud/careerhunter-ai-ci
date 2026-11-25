@@ -22,7 +22,8 @@ Branch: `main` (see GitHub for current documentation checkpoint SHA); applicatio
 - Added a least-privilege mail receipt migration; the sender now checks PostgreSQL schema presence and performs no runtime DDL. The migration has not been applied to production because the original Neon project is not visible to the connected Neon account.
 - Added mock coverage for successful owner-only send, verified identity mismatch, deduplication, independent self-test gate, and PDF/language validation.
 - Verification: full `pytest -q` (499 passed, 2 skipped); Ruff on changed Python files passed. One initial regression command used a nonexistent test filename and was rerun with the repository's actual filenames.
-- No production database, GitHub secrets, Gmail messages, CV data, or Render configuration were changed. Changes are local on branch `task-6-3`; PR/CI status pending.
+- Commit `91fabb9f2b152a0ea2d5c3c7ab06228a1bf7e0ce` is on branch `task-6-3`; PR #74 is open. GitHub checks passed: `Tests`, `postgres-integration`, and `verify` (runs #45620483443, #45620518571, #45620483418). The conditional country-alert job was skipped as configured.
+- No production database, GitHub secrets, Gmail messages, CV data, or Render configuration were changed.
 
 ## Pending / action required
 1. Neon connector currently exposes a newly created Free organization (`Emirhan`), but searches for the original `careerhunter-ai-free` project and known project ID `quiet-art-74335461` returned no results. Reconnect/select the original Neon account/project; do not create a replacement. Fresh counts remain unverified.
@@ -31,7 +32,7 @@ Branch: `main` (see GitHub for current documentation checkpoint SHA); applicatio
 4. Before the self-test can run, owner must upload both CVs and explicitly decide whether to expose `CAREERHUNTER_CV_VAULT_KEY` to this narrowly gated GitHub Actions workflow. That expands the workflow's ability to decrypt stored CVs; no secret was copied or added.
 5. Apply `migrations/20261125_gmail_mail_receipts.sql` as the authorized Neon schema owner after reconnecting to the correct project. The worker intentionally fails closed until the table/columns exist.
 6. There are zero approved employer contacts and no enabled template/automation approval. Keep employer dispatch off until these are explicitly established. No job applications or Gmail messages were sent.
-7. Open PR and CI status pending; Render still runs application commit `3759cc43` until an authorized deployment occurs.
+7. PR #74 is open with CI successful; it is not merged. Render still runs application commit `3759cc43` until an authorized deployment occurs.
 
 ## Next continuation
 Create PR for branch `task-6-3` and verify CI. Restore Neon connector access to the original project, inspect the production receipt schema, then apply the idempotent migration with the schema owner. Owner signs into the panel and uploads both PDFs. Confirm the intended Gmail sender and OAuth grant; decide whether the CV key may be stored as a GitHub secret for this workflow. Only then manually run the owner-only test and verify message ID, Neon receipt, attachment and Telegram notification. Keep employer sending disabled until its separate policy/recipient authorization is complete.
