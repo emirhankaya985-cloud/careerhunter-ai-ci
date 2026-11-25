@@ -16,9 +16,17 @@ ALTER TABLE public.careerhunter_approved_mail_receipts
     ADD COLUMN IF NOT EXISTS provider_message_id varchar(120),
     ADD COLUMN IF NOT EXISTS company_key varchar(64);
 
-GRANT USAGE ON SCHEMA public TO careerhunter_mail_sender;
-GRANT SELECT, INSERT, UPDATE
-    ON TABLE public.careerhunter_approved_mail_receipts
-    TO careerhunter_mail_sender;
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'careerhunter_mail_sender') THEN
+        EXECUTE 'GRANT USAGE ON SCHEMA public TO careerhunter_mail_sender';
+        EXECUTE 'GRANT SELECT, INSERT, UPDATE '
+             || 'ON TABLE public.careerhunter_approved_mail_receipts '
+             || 'TO careerhunter_mail_sender';
+    ELSE
+        RAISE NOTICE 'careerhunter_mail_sender is absent; rerun this migration after role provisioning';
+    END IF;
+END
+$$;
 
 COMMIT;
