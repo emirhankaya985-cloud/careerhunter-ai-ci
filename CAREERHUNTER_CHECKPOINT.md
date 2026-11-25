@@ -2,7 +2,7 @@
 
 Last checked: 2026-11-25 (Europe/Istanbul)
 Repository: `emirhankaya985-cloud/careerhunter-ai-ci`
-Branch/commit: `main` / `3d358aaf8784f9d7c2812229e016f3c39d9902d1`
+Branch: `main` (see GitHub for current documentation checkpoint SHA); application commit: `3759cc43cbfb8353dbfc9bca4e1e21cddcd1dea7`
 
 ## Verified
 - Main contains a documentation-only checkpoint commit (`3d358aaf`); application source remains at `3759cc43`.
@@ -30,3 +30,4 @@ Branch/commit: `main` / `3d358aaf8784f9d7c2812229e016f3c39d9902d1`
 
 ## Next continuation
 After owner login, upload both local PDFs via the existing owner form and verify encrypted readback and language selection. Configure Gmail OAuth securely; keep employer dispatch disabled until recipient and template scope are approved. Then use a dedicated self-recipient worker test and verify the message, attachment, Neon receipt, and notification. Recheck Neon data when authorized connector access is restored.
+
