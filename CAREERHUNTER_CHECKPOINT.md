@@ -2,26 +2,31 @@
 
 Last checked: 2026-11-25 (Europe/Istanbul)
 Repository: `emirhankaya985-cloud/careerhunter-ai-ci`
-Branch/commit: `main` / `3759cc43cbfb8353dbfc9bca4e1e21cddcd1dea7`
+Branch/commit: `main` / `3d358aaf8784f9d7c2812229e016f3c39d9902d1`
 
 ## Verified
-- GitHub `Hourly Career Intelligence` had successful scheduled runs #45493357820 (2026-11-24 21:39 UTC) and #45548241184 (2026-11-25 04:39 UTC); both event=`schedule`. Collector job and database-secret checks passed.
-- Render `/healthz` and `/readyz` returned HTTP 200; `/versionz` returned the current main SHA above.
-- Latest direct Neon read recorded during this session: 5,454 jobs; source/job-key duplicates 0; duplicate job URLs 0; CV vault 0; approvals 0; mail receipts 0; applied opportunities 0.
-- Scheduled Telegram HR email approval workflow #45585129497 completed successfully. No application sends were observed or authorized.
-- Existing CI Tests run #45380854892 succeeded on main SHA.
-- Two original PDFs are present locally in Downloads and previously validated/hash-checked in session. Do not place CV files or their contents in this public repository.
+- Main contains a documentation-only checkpoint commit (`3d358aaf`); application source remains at `3759cc43`.
+- Latest Render `/healthz` and `/readyz` returned HTTP 200; `/versionz` returned `3759cc43`. It is expected to differ from the documentation-only main commit; no app code changed.
+- GitHub `Hourly Career Intelligence` scheduled runs #45493357820 (2026-11-24 21:39 UTC) and #45548241184 (2026-11-25 04:39 UTC) succeeded with event=`schedule`; scan workflow does not depend on Render.
+- Scheduled Telegram HR email approval worker #45585129497 completed successfully. Telegram report workflow #45548646268 completed successfully.
+- Existing code CI run #45380854892 succeeded on the app commit. No code changes were made in this continuation; no new tests were run for documentation-only updates.
+- GitHub Actions secret names currently include `DATABASE_URL`, `CAREERHUNTER_PROFILE_JSON`, `CAREERHUNTER_GMAIL_SEND_DATABASE_URL`, Telegram token/chat ID. No Gmail send OAuth secrets (`GMAIL_SEND_CLIENT_ID`, `GMAIL_SEND_CLIENT_SECRET`, `GMAIL_SEND_REFRESH_TOKEN`) are present.
+- Gmail preflight #45463259099 reported blocked: send disabled, OAuth scope unverified, zero approved contacts, no messages sent.
+- Files `Emirhan_Kaya_CV_EN.pdf` (715894 bytes; SHA-256 `EAF05155147FEFAB4E6F984690917D0E2BFE5A2625BCD32D8B405F1DAD3D36C6`) and `Emirhan_Kaya_CV (1).pdf` (717586 bytes; SHA-256 `EA34F21B18C92F876191F41C90056AD61C844CC6F82A13C94949EBD8467AC585`) are present in local Downloads. Do not put CVs or their contents in this public repository.
+- Latest successful direct Neon read (2026-11-24): 5,454 jobs; source/job-key duplicates 0; duplicate URLs 0; CV vault 0; approvals 0; mail receipts 0; applied opportunities 0. A fresh read on 2026-11-25 failed because the current Neon connector returned `project not found`; updated database counts are therefore unverified.
+- No employer applications were sent. Previous self-email #1a20ec741f4c778e was sent outside the CareerHunter worker and is not worker evidence.
+- Old suspended Render Postgres recovery remains unverified; do not upgrade or delete it.
 
-## Changes in this checkpoint
-- Added this status file only. No production data or secrets are included.
+## Changes in checkpoint
+- Added/updated this file only. No production data or secrets were changed.
 
 ## Pending / action required
-1. Owner must sign in to the CareerHunter panel and upload EN and TR CVs through the owner-only form. The live vault remains empty; browser authentication and CSRF must not be bypassed.
-2. Gmail send OAuth secrets are absent from GitHub Actions: `GMAIL_SEND_CLIENT_ID`, `GMAIL_SEND_CLIENT_SECRET`, `GMAIL_SEND_REFRESH_TOKEN`; send/automation/template approval secrets are also not enabled. Configure via official Google OAuth and GitHub Secrets UI/secure CLI, never paste tokens into chat.
-3. No approved employer contacts exist. Do not enable employer dispatch until verified recipients and template/automation approval are present.
-4. Worker-originated self-test email with PDF attachment, message ID, Neon receipt, and inbox confirmation remains unverified.
-5. No real job applications have been sent; no claims of completion should be made.
-6. Old suspended Render Postgres recovery remains unverified; do not upgrade or delete it.
+1. Owner must sign in to the CareerHunter panel and upload EN and TR PDFs through the owner-only form. Current live vault count remains last measured at 0; browser authentication and CSRF must not be bypassed.
+2. Complete Gmail send OAuth through Google's official flow and securely add the three `GMAIL_SEND_*` values through GitHub Secrets. Do not paste secrets in chat.
+3. There are zero approved employer contacts and no enabled template/automation approval. Keep employer dispatch off until these are explicitly established.
+4. Worker-originated self-test email with PDF, Gmail message ID, Neon receipt, inbox confirmation, and Telegram confirmation remains unverified.
+5. Fresh Neon counts and table health await restored/authorized Neon connector access.
+6. No real job applications have been sent.
 
 ## Next continuation
-After user completes panel sign-in, upload both local PDFs using the authenticated form, then verify encrypted vault readback and language selection. Separately complete Google OAuth through the official flow, store the three send credentials in GitHub Secrets, keep employer dispatch disabled until the owner approves a specific template/scope, then use a dedicated self-recipient test path and verify Gmail message/Neon receipt without contacting employers.
+After owner login, upload both local PDFs via the existing owner form and verify encrypted readback and language selection. Configure Gmail OAuth securely; keep employer dispatch disabled until recipient and template scope are approved. Then use a dedicated self-recipient worker test and verify the message, attachment, Neon receipt, and notification. Recheck Neon data when authorized connector access is restored.
