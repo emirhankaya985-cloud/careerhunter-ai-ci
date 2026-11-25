@@ -1,0 +1,53 @@
+name: CareerHunter owner-only Gmail self-test
+
+on:
+  workflow_dispatch:
+    inputs:
+      language:
+        description: CV language to attach
+        type: choice
+        options: [en, tr]
+        required: true
+      confirm_send:
+        description: Send one fixed test email to the protected owner account
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: careerhunter-owner-gmail-self-test
+  cancel-in-progress: false
+
+jobs:
+  self-test:
+    if: >-
+      github.repository == 'emirhankaya985-cloud/careerhunter-ai-ci' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == 'emirhankaya985-cloud' &&
+      inputs.confirm_send == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -e '.[web]'
+      - name: Send one owner-only CV test
+        env:
+          CAREERHUNTER_SELF_TEST_LANGUAGE: ${{ inputs.language }}
+          CAREERHUNTER_GMAIL_SELF_TEST_ENABLED: ${{ secrets.CAREERHUNTER_GMAIL_SELF_TEST_ENABLED }}
+          CAREERHUNTER_GMAIL_SELF_TEST_ACCOUNT: ${{ secrets.CAREERHUNTER_GMAIL_SELF_TEST_ACCOUNT }}
+          GMAIL_SEND_CLIENT_ID: ${{ secrets.GMAIL_SEND_CLIENT_ID }}
+          GMAIL_SEND_CLIENT_SECRET: ${{ secrets.GMAIL_SEND_CLIENT_SECRET }}
+          GMAIL_SEND_REFRESH_TOKEN: ${{ secrets.GMAIL_SEND_REFRESH_TOKEN }}
+          CAREERHUNTER_GMAIL_SEND_ENABLED: 'false'
+          CAREERHUNTER_GMAIL_SEND_DATABASE_URL: ${{ secrets.CAREERHUNTER_GMAIL_SEND_DATABASE_URL }}
+          CAREERHUNTER_CRM_DATABASE_URL: ${{ secrets.CAREERHUNTER_GMAIL_SEND_DATABASE_URL }}
+          CAREERHUNTER_CV_VAULT_KEY: ${{ secrets.CAREERHUNTER_CV_VAULT_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: PYTHONPATH=src python -m careerhunter.gmail_self_test

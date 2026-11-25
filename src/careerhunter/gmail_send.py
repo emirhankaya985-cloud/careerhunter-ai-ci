@@ -18,12 +18,13 @@ from email.message import EmailMessage
 from urllib.parse import urlsplit
 
 import httpx
-from sqlalchemy import Column, MetaData, String, Table, create_engine, func, select, text, update
+from sqlalchemy import Column, MetaData, String, Table, create_engine, func, inspect, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.engine import make_url
 
 TOKEN_URL = "https://oauth2.googleapis.com/token"
+USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
 MAIL_KEY = re.compile(r"^[A-Za-z0-9_-]{8,80}$")
 EMAIL = re.compile(r"^[^@\s,<>]+@[^@\s,<>]+\.[^@\s,<>]+$")
@@ -113,7 +114,10 @@ def _configured() -> bool:
     return all(_credentials())
 
 
-def _send(mail: ApprovedMail, client: httpx.Client | None = None) -> str:
+def _send(
+    mail: ApprovedMail, client: httpx.Client | None = None,
+    *, expected_account: str | None = None,
+) -> str:
     msg = EmailMessage()
     msg["To"] = mail.recipient
     msg["Subject"] = mail.subject.strip()
@@ -140,9 +144,20 @@ def _send(mail: ApprovedMail, client: httpx.Client | None = None) -> str:
             token = response.json().get("access_token")
             if not isinstance(token, str) or not 5 <= len(token) <= 8192:
                 raise GmailSendError("oauth_token_invalid")
+            headers = {"Authorization": "Bearer " + token}
+            if expected_account is not None:
+                # The self-test OAuth grant must include `openid email` so the
+                # worker can prove the token belongs to the protected owner account.
+                identity = http.get(USERINFO_URL, headers=headers)
+                identity.raise_for_status()
+                identity_body = identity.json()
+                actual_email = identity_body.get("email")
+                if (identity_body.get("email_verified") is not True
+                        or not isinstance(actual_email, str)
+                        or actual_email.casefold() != expected_account.casefold()):
+                    raise GmailSendError("gmail_sender_account_mismatch")
             result = http.post(
-                SEND_URL, headers={"Authorization": "Bearer " + token},
-                json={"raw": encoded},
+                SEND_URL, headers=headers, json={"raw": encoded},
             )
             result.raise_for_status()
             provider_id = result.json().get("id")
@@ -164,9 +179,65 @@ def send_approved_once(
     A claim is written BEFORE hitting Gmail. This intentionally prefers missing a
     send over duplicating an application if the provider response is lost.
     """
+    return _send_durably(
+        mail, database_url=database_url, client=client,
+        allow_sqlite_tests=allow_sqlite_tests,
+        required_gate="CAREERHUNTER_GMAIL_SEND_ENABLED",
+        success_status="sent",
+    )
+
+
+def send_owner_self_test_once(
+    language: str, attachment_pdf: bytes, *, database_url: str,
+    client: httpx.Client | None = None,
+    allow_sqlite_tests: bool = False,
+) -> str:
+    """Send one fixed CV test only to the protected, OAuth-verified owner account.
+
+    This path cannot accept a recipient, subject, or body from workflow input and
+    does not consume an application/approval queue row. The stable approval key
+    makes repeated or ambiguous attempts fail closed.
+    """
+    if os.getenv("CAREERHUNTER_GMAIL_SELF_TEST_ENABLED") != "true":
+        raise GmailSendError("gmail_self_test_disabled")
+    if language not in {"en", "tr"}:
+        raise GmailSendError("invalid_self_test_language")
+    owner_account = os.getenv("CAREERHUNTER_GMAIL_SELF_TEST_ACCOUNT", "").strip()
+    if not EMAIL.fullmatch(owner_account):
+        raise GmailSendError("self_test_owner_account_missing")
+    filename = f"careerhunter_cv_{language}.pdf"
+    mail = ApprovedMail(
+        recipient=owner_account,
+        subject=f"CareerHunter AI private delivery test ({language.upper()})",
+        body="This is a one-time CareerHunter Gmail worker test to your verified owner account.\r\n",
+        contact_evidence_url="https://mail.google.com/",
+        approval_id=f"careerhunter-self-test-v1-{language}",
+        approved_by_owner=True,
+        attachment_pdf=attachment_pdf,
+        attachment_filename=filename,
+    )
+    return _send_durably(
+        mail, database_url=database_url, client=client,
+        allow_sqlite_tests=allow_sqlite_tests,
+        required_gate="CAREERHUNTER_GMAIL_SELF_TEST_ENABLED",
+        success_status="sent_self_test",
+        expected_account=owner_account,
+    )
+
+
+def _send_durably(
+    mail: ApprovedMail, *, database_url: str, client: httpx.Client | None,
+    allow_sqlite_tests: bool, required_gate: str, success_status: str,
+    expected_account: str | None = None,
+) -> str:
     mail.validate()
+    if os.getenv(required_gate) != "true":
+        if required_gate == "CAREERHUNTER_GMAIL_SEND_ENABLED":
+            raise GmailSendError("gmail_send_disabled")
+        raise GmailSendError("gmail_self_test_disabled")
     if os.getenv("CAREERHUNTER_GMAIL_SEND_ENABLED") != "true":
-        raise GmailSendError("gmail_send_disabled")
+        if required_gate == "CAREERHUNTER_GMAIL_SEND_ENABLED":
+            raise GmailSendError("gmail_send_disabled")
     if not _configured():
         raise GmailSendError("gmail_send_oauth_missing")
     try:
@@ -180,17 +251,17 @@ def send_approved_once(
             raise GmailSendError("postgresql_ledger_required")
         engine = create_engine(database_url, pool_pre_ping=True)
         try:
-            metadata.create_all(engine, tables=[mail_receipts])
             if backend == "postgresql":
-                with engine.begin() as conn:
-                    conn.execute(text(
-                        "ALTER TABLE careerhunter_approved_mail_receipts "
-                        "ADD COLUMN IF NOT EXISTS provider_message_id VARCHAR(120)"
-                    ))
-                    conn.execute(text(
-                        "ALTER TABLE careerhunter_approved_mail_receipts "
-                        "ADD COLUMN IF NOT EXISTS company_key VARCHAR(64)"
-                    ))
+                with engine.connect() as conn:
+                    if not inspect(conn).has_table(mail_receipts.name, schema="public"):
+                        raise GmailSendError("mail_receipt_table_missing")
+                    columns = {column["name"] for column in inspect(conn).get_columns(
+                        mail_receipts.name, schema="public"
+                    )}
+                    if not {"provider_message_id", "company_key"}.issubset(columns):
+                        raise GmailSendError("mail_receipt_schema_migration_required")
+            else:
+                metadata.create_all(engine, tables=[mail_receipts])
             key = mail.key()
             now = datetime.now(timezone.utc).isoformat()
             today = datetime.now(timezone.utc).date().isoformat()
@@ -220,12 +291,12 @@ def send_approved_once(
                 )
                 if conn.execute(statement).rowcount != 1:
                     raise GmailSendError("duplicate_or_previous_attempt")
-            provider_id = _send(mail, client)
+            provider_id = _send(mail, client, expected_account=expected_account)
             receipt_hash = hashlib.sha256(provider_id.encode("utf-8")).hexdigest()
             with engine.begin() as conn:
                 conn.execute(update(mail_receipts).where(
                     mail_receipts.c.mail_hash == key
-                ).values(status="sent", provider_receipt_hash=receipt_hash,
+                ).values(status=success_status, provider_receipt_hash=receipt_hash,
                          provider_message_id=provider_id))
             return provider_id
         finally:
