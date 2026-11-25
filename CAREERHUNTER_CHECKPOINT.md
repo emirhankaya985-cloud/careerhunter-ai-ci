@@ -1,38 +1,39 @@
 # CareerHunter AI Checkpoint
 
-Last checked: 2026-11-25 (Europe/Istanbul; Task 6.4)
+Last updated: 2026-11-26 (Europe/Istanbul)
 Repository: `emirhankaya985-cloud/careerhunter-ai-ci`
-PR: #74, branch `task-6-3`; application currently running on Render: `3759cc43cbfb8353dbfc9bca4e1e21cddcd1dea7`.
+Production main SHA: `637c83507dae3c9856f0d9c49af31e9a214fe6de`
 
-## Verified
+## Verified in this continuation
 
-- New Neon project `hidden-fog-42701810` (`careerhunter-ai-free`, organization `org-icy-cake-74628211`) was created 2026-11-25. Default branch: `br-autumn-cell-bb1fk9d1`; PostgreSQL 18.7. It contains only database `neondb`; table inventory is empty, and `careerhunter_live` does not exist. It is not a usable CareerHunter target yet.
-- Previous project `quiet-art-74335461` and branch `br-young-sky-b9whr2a6` did not appear in Neon search or the connected organization's recoverable-project list. No export/backup is available through the Neon connector. The historical 5,454-job count has not been transferred or remeasured.
-- GitHub Actions no-send Gmail preflight #45640117261 succeeded. `gmail.send` scope verified; current mail writer connects to `careerhunter_live` as `careerhunter_mail_sender`, with approval table present. Send gate false, approved recipients 0, automatic dispatch/template approval false, messages sent 0. This confirms the old connection is reachable, but not which Neon project it targets or the Gmail token's account identity.
-- GitHub Actions has the user-listed OAuth and self-test secret names. Values were not read. The database URL secrets were last updated 2026-11-24, so their target cannot be inferred. `CAREERHUNTER_CV_VAULT_KEY` and `CAREERHUNTER_APPLICATION_REPLY_TO` are absent.
-- Local CV files were verified on 2026-11-25: EN 715,894 bytes, SHA-256 `EAF05155147FEFAB4E6F984690917D0E2BFE5A2625BCD32D8B405F1DAD3D36C6`; TR 717,586 bytes, SHA-256 `EA34F21B18C92F876191F41C90056AD61C844CC6F82A13C94949EBD8467AC585`. Both are one-page, unencrypted PDFs with extractable text and matching language labels. They have not been uploaded.
-- Hourly collector's latest observed successful scheduled run: #45548241184 (2026-11-25 04:39 UTC). Telegram approval worker: #45585129497 (2026-11-25 09:24 UTC). Both workflows are active, but no newer scheduled runs appeared in the history checked at 14:59 UTC.
-- Render read-only check reported `/healthz` 200, `/readyz` 200, `/versionz` `3759cc43`. No database URLs or Render settings were changed.
-- PR #74 remains open. Tests and PostgreSQL integration checks passed on `c053d66`; local full suite: 499 passed, 2 skipped; final Gmail self-test suite: 13 passed; Ruff passed. No Gmail messages or employer applications were sent.
+- GitHub access recovered. The Actions `DATABASE_URL` secret was updated on 2026-11-25 19:41 UTC to the `careerhunter_actions` role on the new Neon target. Its value was not printed.
+- Manual Hourly Career Intelligence run [#45687710676](https://github.com/emirhankaya985-cloud/careerhunter-ai-ci/actions/runs/45687710676) completed successfully at 19:44 UTC. It processed and saved 2,726 jobs. Neon SQL on project `hidden-fog-42701810`, branch `br-autumn-cell-bb1fk9d1`, database `careerhunter_live`, returned 2,726 `jobs`, 1 `runs`, and 0 CV rows. Database has unique `(source, job_id)` and `(source, job_url)` constraints.
+- New Neon project is `careerhunter-ai-free`, project ID `hidden-fog-42701810`; default branch is ready. Core schema version is 4. The old Render PostgreSQL is not used for this scan.
+- Render `/healthz` and `/readyz` returned `ok` and `ready`; `/versionz` returned `637c83507dae3c9856f0d9c49af31e9a214fe6de`.
+- The Render `CAREERHUNTER_CRM_DATABASE_URL` value was corrected to the restricted `careerhunter_cv_writer` role on `careerhunter_live`. Render `/internal/owner/cv/status` then returned `ready`; its readiness included a valid encryption key and reachable vault. The vault still has 0 rows because PDFs have not been uploaded.
+- The new database contains `careerhunter_cv_vault`; `careerhunter_cv_writer` can SELECT/INSERT the vault and cannot SELECT `jobs`.
+- GitHub secret `NTFY_TOPIC` is absent; NTFY delivery is disabled until the user supplies the intended topic. No other NTFY destination was created.
+- Gmail preflight #45684257217 succeeded without sending mail. No self-test or employer email was sent in this continuation.
+- Created the new Neon `careerhunter_mail_sender` login role and applied idempotent Telegram approval / Gmail receipt table migrations. It has SELECT/INSERT/UPDATE only on those two tables; it cannot read `jobs` or the CV vault.
+- GitHub `CAREERHUNTER_GMAIL_SEND_DATABASE_URL` was updated to the new restricted role. Worker run [#45712865126](https://github.com/emirhankaya985-cloud/careerhunter-ai-ci/actions/runs/45712865126) succeeded against it with an empty queue; Neon shows 0 approvals and 0 receipts. Render's matching `CAREERHUNTER_GMAIL_SEND_DATABASE_URL` still needs user update, so the app queue and worker are not yet proven on the same database.
+- No natural hourly run has occurred after the target change. Cron `0 * * * *` remains configured; the one successful new-target scan was a manual dispatch.
+- NTFY is disabled: repository `NTFY_TOPIC` secret is absent.
 
-## Task 6.3 code
+## Local changes not yet pushed
 
-- Added an owner-only manual Gmail test that fixes the recipient to a protected secret, verifies OAuth `email_verified` identity before sending, attaches only the selected vault CV, and records a one-shot `sent_self_test` receipt.
-- Added least-privilege mail-receipt schema migration; the worker checks schema and does no runtime PostgreSQL DDL.
-- Test workflow requires owner actor, main branch, explicit dispatch confirmation, selected language, CV key, Gmail OAuth and database secrets. Employer dispatch remains disabled.
-- Task 6.4 review found the migration's unconditional grant failed if `careerhunter_mail_sender` did not exist. The branch now conditionally grants only when the role exists; rerunning after role provisioning applies the grants. This updated patch still needs CI.
+- `src/careerhunter/notifications/ntfy.py`: identifies partial source failures in successful run alerts and adds a deterministic `X-Sequence-ID` so ntfy updates the same run notification on retry.
+- `tests/test_ntfy.py`: verifies partial scan reporting and stable run sequence IDs.
+- Focused checks passed: `pytest -q tests/test_ntfy.py` (4 passed), `ruff check src/careerhunter/notifications/ntfy.py tests/test_ntfy.py`.
+- Full suite, commit, push, PR, and CI for these changes are still pending.
 
-## Pending
+## Remaining work
 
-1. Lossless transfer: source project and full export are not visible in Neon connector. Existing GitHub secrets reach a database named `careerhunter_live`, but the source project identity and full table/key inventory have not been verified. Do not switch production URLs to the empty project.
-2. Prepare a verified `careerhunter_live` database and least-privilege application/mail roles in the new project, then transfer and compare every table/row/key before any cutover.
-3. After cutover, apply migrations and verify application read/write. The receipt migration is not applied to any production database.
-4. Upload EN/TR CVs after the correct vault exists. Vault key is not in GitHub Actions; adding it would allow the gated workflow to decrypt CVs and needs explicit approval.
-5. No-send preflight proves the token has `gmail.send` scope, not that GitHub's refresh token belongs to the intended sender. Owner-only test will verify identity before sending, but needs a populated vault and correct target DB.
-6. `CAREERHUNTER_APPLICATION_REPLY_TO` is absent. Employer dispatch/template gates remain off and there are zero approved employer recipients.
-7. Resolve Google's OAuth Testing-mode refresh token expiry compliantly (publish/verify External app, or use Internal only if eligible); do not work around the limit by repeatedly rotating tokens.
-8. The last observed scheduled scan/Telegram runs are several hours old, despite workflows being active. Recheck natural schedules after database target is verified.
+1. Restore the Codex-Brave browser control; then upload the local English and Turkish PDFs and verify encrypted storage plus byte-for-byte readback without exposing contents.
+2. Review `CAREERHUNTER_PROFILE_JSON` privately before treating score output as candidate-accurate. The current rule matcher scores skills, role, seniority, freshness, and location/eligibility; education, language, and actual candidate experience are not scored. Public `config/profile.yaml` is only a sample.
+3. Confirm the next naturally scheduled hourly run writes to the new Neon target.
+4. Update Render `CAREERHUNTER_GMAIL_SEND_DATABASE_URL` to new Neon role `careerhunter_mail_sender` so Render queue writes and Actions worker reads share the same database.
+5. User must add the intended `NTFY_TOPIC` secret if NTFY reports are required.
+6. Verify the owner-only Gmail self-test only after CV storage/readback is verified. Do not send employer applications without recipient, template, and automation approval.
+7. PR #76 is open and has successful CI, but its change includes a CV deletion path that also deletes history; review that data-loss behavior before any merge. PR #75 is a stale checkpoint-only PR.
 
-## Next steps
-
-Review and merge PR #74 only after the corrected migration CI passes and schema/cutover risk is understood. Use the currently reachable source connection to perform a read-only full inventory and verified export; restore into the new project only after its `careerhunter_live` database and roles are prepared. Compare table counts, keys, and data before switching GitHub or Render URLs. Then upload the two verified CVs, confirm OAuth identity with a no-send check, run one owner-only CV test, and verify Gmail receipt plus Telegram notification. Keep employer dispatch off until recipient, template, and limits are approved.
+See [`USER_ACTION_REQUIRED.md`](USER_ACTION_REQUIRED.md) for the single remaining user setup item and direct links.
