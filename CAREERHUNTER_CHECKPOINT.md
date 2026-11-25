@@ -1,38 +1,48 @@
 # CareerHunter AI Checkpoint
 
-Last checked: 2026-11-25 (Europe/Istanbul; Task 6.4)
+Last updated: 2026-11-25 (Europe/Istanbul; fresh Neon continuation)
 Repository: `emirhankaya985-cloud/careerhunter-ai-ci`
-PR: #74, branch `task-6-3`; application currently running on Render: `3759cc43cbfb8353dbfc9bca4e1e21cddcd1dea7`.
+Production code merge: PR #74, `637c83507dae3c9856f0d9c49af31e9a214fe6de`
 
-## Verified
+## Current task result
 
-- New Neon project `hidden-fog-42701810` (`careerhunter-ai-free`, organization `org-icy-cake-74628211`) was created 2026-11-25. Default branch: `br-autumn-cell-bb1fk9d1`; PostgreSQL 18.7. It contains only database `neondb`; table inventory is empty, and `careerhunter_live` does not exist. It is not a usable CareerHunter target yet.
-- Previous project `quiet-art-74335461` and branch `br-young-sky-b9whr2a6` did not appear in Neon search or the connected organization's recoverable-project list. No export/backup is available through the Neon connector. The historical 5,454-job count has not been transferred or remeasured.
-- GitHub Actions no-send Gmail preflight #45640117261 succeeded. `gmail.send` scope verified; current mail writer connects to `careerhunter_live` as `careerhunter_mail_sender`, with approval table present. Send gate false, approved recipients 0, automatic dispatch/template approval false, messages sent 0. This confirms the old connection is reachable, but not which Neon project it targets or the Gmail token's account identity.
-- GitHub Actions has the user-listed OAuth and self-test secret names. Values were not read. The database URL secrets were last updated 2026-11-24, so their target cannot be inferred. `CAREERHUNTER_CV_VAULT_KEY` and `CAREERHUNTER_APPLICATION_REPLY_TO` are absent.
-- Local CV files were verified on 2026-11-25: EN 715,894 bytes, SHA-256 `EAF05155147FEFAB4E6F984690917D0E2BFE5A2625BCD32D8B405F1DAD3D36C6`; TR 717,586 bytes, SHA-256 `EA34F21B18C92F876191F41C90056AD61C844CC6F82A13C94949EBD8467AC585`. Both are one-page, unencrypted PDFs with extractable text and matching language labels. They have not been uploaded.
-- Hourly collector's latest observed successful scheduled run: #45548241184 (2026-11-25 04:39 UTC). Telegram approval worker: #45585129497 (2026-11-25 09:24 UTC). Both workflows are active, but no newer scheduled runs appeared in the history checked at 14:59 UTC.
-- Render read-only check reported `/healthz` 200, `/readyz` 200, `/versionz` `3759cc43`. No database URLs or Render settings were changed.
-- PR #74 remains open. Tests and PostgreSQL integration checks passed on `c053d66`; local full suite: 499 passed, 2 skipped; final Gmail self-test suite: 13 passed; Ruff passed. No Gmail messages or employer applications were sent.
+- User chose to abandon old database data and start fresh on the new Neon project.
+- GitHub is reported to be experiencing a service outage. Secret API attempts returned HTTP 500. Per user instruction, do not treat these as code defects, retry push/PR/CI operations, or change the current production configuration during the outage.
+- No production GitHub secret, Render database URL, or Render setting was changed. The production app still points to its previous configuration.
 
-## Task 6.3 code
+## New Neon target prepared
 
-- Added an owner-only manual Gmail test that fixes the recipient to a protected secret, verifies OAuth `email_verified` identity before sending, attaches only the selected vault CV, and records a one-shot `sent_self_test` receipt.
-- Added least-privilege mail-receipt schema migration; the worker checks schema and does no runtime PostgreSQL DDL.
-- Test workflow requires owner actor, main branch, explicit dispatch confirmation, selected language, CV key, Gmail OAuth and database secrets. Employer dispatch remains disabled.
-- Task 6.4 review found the migration's unconditional grant failed if `careerhunter_mail_sender` did not exist. The branch now conditionally grants only when the role exists; rerunning after role provisioning applies the grants. This updated patch still needs CI.
+- Project: `careerhunter-ai-free`, project ID `hidden-fog-42701810`, organization `org-icy-cake-74628211`.
+- Branch: `br-autumn-cell-bb1fk9d1`; database: `careerhunter_live`; PostgreSQL 18.7.
+- Installed the fresh core schema: 11 tables; `schema_versions` reports version 4. No legacy records were copied; jobs table is empty.
+- Created `careerhunter_actions` with read/write privileges on the public schema. An insert/delete permission check on `runs` completed successfully within one transaction; no test row remains.
+- This new database is not yet connected to GitHub Actions or Render. No new scan has written to it.
+- CV vault, mail-approval, and Gmail-receipt supporting tables are not provisioned on this target. No new Neon connection string was saved to GitHub or Render.
 
-## Pending
+## Existing verification
 
-1. Lossless transfer: source project and full export are not visible in Neon connector. Existing GitHub secrets reach a database named `careerhunter_live`, but the source project identity and full table/key inventory have not been verified. Do not switch production URLs to the empty project.
-2. Prepare a verified `careerhunter_live` database and least-privilege application/mail roles in the new project, then transfer and compare every table/row/key before any cutover.
-3. After cutover, apply migrations and verify application read/write. The receipt migration is not applied to any production database.
-4. Upload EN/TR CVs after the correct vault exists. Vault key is not in GitHub Actions; adding it would allow the gated workflow to decrypt CVs and needs explicit approval.
-5. No-send preflight proves the token has `gmail.send` scope, not that GitHub's refresh token belongs to the intended sender. Owner-only test will verify identity before sending, but needs a populated vault and correct target DB.
-6. `CAREERHUNTER_APPLICATION_REPLY_TO` is absent. Employer dispatch/template gates remain off and there are zero approved employer recipients.
-7. Resolve Google's OAuth Testing-mode refresh token expiry compliantly (publish/verify External app, or use Internal only if eligible); do not work around the limit by repeatedly rotating tokens.
-8. The last observed scheduled scan/Telegram runs are several hours old, despite workflows being active. Recheck natural schedules after database target is verified.
+- PR #74 was merged as `637c83507dae3c9856f0d9c49af31e9a214fe6de`; post-merge CI #45641771212 and controlled E2E/Live ATS run #45641771278 passed.
+- Latest observed scheduled scan #45641397546 processed 2,978 jobs and recorded 16 new jobs against the previous, unverified database target.
+- Gmail no-send preflight #45640117261 verified `gmail.send` scope and database reachability. Sending was disabled; approved recipient count was 0; no Gmail message was sent. Employer outreach remains disabled.
+- Telegram worker run #45642529228 succeeded against its then-configured target.
+- Render `/healthz` and `/readyz` returned HTTP 200. `/versionz` reported `3759cc43cbfb8353dbfc9cba4e1e21cddcd1dea7`.
+- Provided EN/TR PDFs were previously verified locally; neither has been uploaded. `CAREERHUNTER_CV_VAULT_KEY` and `CAREERHUNTER_APPLICATION_REPLY_TO` were absent from the GitHub secret list last inspected.
 
-## Next steps
+## Local quality checks (2026-11-25)
 
-Review and merge PR #74 only after the corrected migration CI passes and schema/cutover risk is understood. Use the currently reachable source connection to perform a read-only full inventory and verified export; restore into the new project only after its `careerhunter_live` database and roles are prepared. Compare table counts, keys, and data before switching GitHub or Render URLs. Then upload the two verified CVs, confirm OAuth identity with a no-send check, run one owner-only CV test, and verify Gmail receipt plus Telegram notification. Keep employer dispatch off until recipient, template, and limits are approved.
+- `pytest -q`: 499 passed, 2 skipped, 24 existing Pydantic serialization warnings.
+- `ruff check`: passed.
+- No source code was changed in this continuation; these checks confirm the current repository baseline.
+
+## After GitHub recovers
+
+1. Update Actions `DATABASE_URL` to the `careerhunter_actions` connection, then dispatch one scan and confirm Neon project ID `hidden-fog-42701810`, job inserts, and run receipt.
+2. Change Render's explicit Neon target and reader/writer URLs only after the Actions target is verified; deploy and check health, ready, version, and database identity.
+3. Provision least-privilege dashboard, CV, and mail roles and their schemas; securely configure the CV encryption key, then upload/read back both CVs.
+4. Verify Gmail OAuth identity, From, and Reply-To. Keep employer sends disabled; send only the owner test after explicit approval.
+5. Confirm scheduled workflows operate against the fresh target. Do not claim that legacy records were copied.
+
+## GitHub change state
+
+- PR #75 (checkpoint-only) remains open from the preceding attempt. Its text predates this fresh-target setup. No further PR, push, or CI requests were made after the outage instruction.
+- This checkpoint is intended to be committed locally now; do not push it until GitHub recovers.
