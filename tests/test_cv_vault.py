@@ -4,7 +4,7 @@ import re
 from sqlalchemy import select
 from fastapi.testclient import TestClient
 
-from careerhunter.cv_vault import vault
+from careerhunter.cv_vault import history, vault
 from careerhunter.database import SQLiteRepository
 from careerhunter.private_site import app, _get_engine, failed_logins
 
@@ -62,11 +62,25 @@ def test_cv_vault_upload_read_delete_is_private_and_encrypted(tmp_path, monkeypa
             assert downloaded.content == pdf
             assert downloaded.headers["cache-control"] == "no-store, private"
 
+            updated_pdf = b"%PDF-1.4\nsecond synthetic cv fixture\n%%EOF"
+            updated = client.put("/internal/owner/cv/en", content=updated_pdf, headers=headers)
+            assert updated.json()["status"] == "stored"
+            duplicate = client.put("/internal/owner/cv/en", content=pdf, headers=headers)
+            assert duplicate.json()["status"] == "duplicate"
+            assert client.get("/internal/owner/cv/en").content == updated_pdf
+            with repo.engine.connect() as conn:
+                archived = conn.execute(select(history)).mappings().all()
+                assert len(archived) == 2
+                assert all(pdf not in row["ciphertext"] for row in archived)
+                assert all(updated_pdf not in row["ciphertext"] for row in archived)
+
             deleted = client.delete("/internal/owner/cv/en", headers={
                 "origin": "https://testserver", "x-csrf-token": csrf,
             })
             assert deleted.status_code == 200
             assert not client.get("/internal/owner/cv/status").json()["cvs"]["en"]["uploaded"]
+            with repo.engine.connect() as conn:
+                assert not conn.execute(select(history)).all()
     finally:
         _get_engine.cache_clear()
 
