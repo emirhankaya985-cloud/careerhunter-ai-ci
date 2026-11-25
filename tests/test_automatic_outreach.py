@@ -1,14 +1,17 @@
 from datetime import timedelta
 
-from careerhunter.automatic_outreach import _application_address, run_auto_outreach
+from careerhunter.automatic_outreach import (
+    TEMPLATE_VERSION, _application_address, _language, _message, run_auto_outreach,
+)
 from careerhunter.models import Job, utc_now
 
 
-def job(*, score=60, description="To apply, email your CV to recruiting@example.org.",
-        company="Example"):
+def job(*, score=60,
+        description="Applications are accepted by email at recruiting@example.org.",
+        company="Example", location="Turkey"):
     return Job(
         job_id="job-001", source="greenhouse", company=company,
-        title="Junior Python Backend Developer", location="Turkey",
+        title="Junior Python Backend Developer", location=location,
         description=description, remote_type="remote", experience_level="junior",
         match_score=score, verification_status="ATS_LISTED",
         verification_observed_at=utc_now(), turkey_eligibility="verified",
@@ -45,7 +48,7 @@ class Repo:
 
 def enable_auto(monkeypatch):
     monkeypatch.setenv("CAREERHUNTER_GMAIL_AUTO_OUTREACH_ENABLED", "true")
-    monkeypatch.setenv("CAREERHUNTER_GMAIL_AUTO_TEMPLATE_APPROVED", "v1")
+    monkeypatch.setenv("CAREERHUNTER_GMAIL_AUTO_TEMPLATE_APPROVED", TEMPLATE_VERSION)
     monkeypatch.setenv("CAREERHUNTER_GMAIL_SEND_ENABLED", "true")
     monkeypatch.setenv("CAREERHUNTER_GMAIL_SEND_DATABASE_URL", "postgresql://writer")
 
@@ -54,6 +57,33 @@ def test_discovery_requires_explicit_email_application_instruction():
     assert _application_address(job()) == "recruiting@example.org"
     assert _application_address(job(description="Questions? contact support@example.org")) is None
     assert _application_address(job(description="Send your CV to candidate@gmail.com")) is None
+    assert _application_address(job(description=(
+        "Applications are accepted by email at recruiting@example.org. "
+        "A CV must be attached."
+    ))) is None
+
+
+def test_message_language_follows_job_country_and_never_defaults_to_turkish_abroad():
+    assert _language(job(location="Istanbul, Türkiye")) == "tr"
+    assert _language(job(location="Remote, United States")) == "en"
+    assert _language(job(location="Remote, Germany")) == "de"
+    assert _language(job(location="Remote", description=(
+        "Wir suchen eine Person. Bitte senden Sie Ihre Bewerbung per E-Mail."
+    ))) == "de"
+    assert _language(job(location="Remote, United States", description=(
+        "Başvuru için şirket ekibimize e-posta gönderin."
+    ))) == "en"
+    assert _language(job(location="Remote", description="Başvuru şirket pozisyon")) is None
+
+
+def test_cvless_message_templates_are_localized_and_do_not_claim_an_attachment():
+    sample = job()
+    for language in ("tr", "en", "de"):
+        subject, body = _message({}, sample, language)
+        assert subject and body
+        assert "attached" not in body.casefold()
+        assert "ekte" not in body.casefold()
+        assert "Lebenslauf" not in body
 
 
 def test_dry_run_never_writes_contacts_or_sends(monkeypatch):
@@ -100,14 +130,12 @@ def test_unverified_or_stale_or_ineligible_listing_is_not_eligible():
         assert result["eligible_jobs"] == 0
 
 
-def test_auto_send_requires_cv_and_records_gmail_acceptance(monkeypatch):
+def test_cvless_auto_send_records_gmail_acceptance(monkeypatch):
     enable_auto(monkeypatch)
     monkeypatch.setattr("careerhunter.personal_profile.load_match_profile", lambda: {
         "name": "Emirhan Kaya", "skills": ["Python"],
         "target_roles": ["Python Backend Developer"],
     })
-    monkeypatch.setattr("careerhunter.cv_vault.load_cv_attachment", lambda language: (
-        b"%PDF-1.7\n%%EOF", f"careerhunter_cv_{language}.pdf"))
     sent = []
 
     def send(mail, *, database_url):
@@ -123,26 +151,13 @@ def test_auto_send_requires_cv_and_records_gmail_acceptance(monkeypatch):
     mail, writer = sent[0]
     assert mail.recipient == "recruiting@example.org"
     assert mail.approved_by_owner is True
-    assert mail.attachment_filename == "careerhunter_cv_en.pdf"
-    assert mail.attachment_pdf.startswith(b"%PDF-")
+    assert mail.attachment_filename is None
+    assert mail.attachment_pdf is None
+    assert "attached" not in mail.body.casefold()
     assert writer == "postgresql://writer"
     assert repo.opportunities[0].status == "applied"
     assert repo.interactions[0].outcome == "gmail_accepted"
     assert next(iter(repo.contacts.values())).status == "contacted_automatically"
-
-
-def test_missing_cv_blocks_without_attempting_send(monkeypatch):
-    enable_auto(monkeypatch)
-    monkeypatch.setattr("careerhunter.personal_profile.load_match_profile", lambda: {
-        "name": "Emirhan Kaya", "skills": ["Python"], "target_roles": ["Python Developer"],
-    })
-    monkeypatch.setattr("careerhunter.cv_vault.load_cv_attachment",
-                        lambda _language: (_ for _ in ()).throw(LookupError("cv_not_uploaded")))
-    monkeypatch.setattr("careerhunter.gmail_send.send_approved_once",
-                        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("sent")))
-    result = run_auto_outreach(Repo(), [job()])
-    assert result["status"] == "approved_cv_missing_or_unavailable"
-    assert result["sent"] == 0
 
 
 def test_outreach_readiness_reports_switches_without_enabling_dispatch(monkeypatch):
@@ -157,5 +172,4 @@ def test_outreach_readiness_reports_switches_without_enabling_dispatch(monkeypat
     assert result["gmail_send_enabled"] is False
     assert result["receipt_writer_configured"] is False
     assert result["candidate_profile_available"] is False
-    assert result["approved_cv_available"] is False
     assert result["sent"] == 0

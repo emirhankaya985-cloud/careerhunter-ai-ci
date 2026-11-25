@@ -27,11 +27,13 @@ Repository: `emirhankaya985-cloud/careerhunter-ai-ci`
 - Rule matcher currently scores declared skills, target role, job seniority, location/eligibility, and freshness. It does not score education, candidate language, actual experience duration, or produce per-dimension breakdowns.
 - The private production profile is intentionally not printed, committed, or logged. Do not replace it with the public sample profile.
 - User screenshot showed `Invalid request origin` on a panel request. Origin/CSRF protections were not weakened. The exact route was not readable from the screenshot; because CV upload was canceled, no upload retry was made.
+- Owner explicitly approved CV-less automatic email outreach using a localized application message. Implementation is pending review/merge: Türkiye → Turkish; United States/UK/Australia → English; Germany → German. Unknown/ambiguous languages are skipped; email routes that require a CV are excluded. Existing 60+ score, verified eligibility, explicit email-application evidence, duplicate, daily 5, and one-per-company limits remain required. Do not enable the switches until the code is merged and tested; then verify a production run without exposing recipients or message content.
 
 ## Next actions
 
 1. Observe the next natural hourly scan and verify its Neon writes.
-2. Add `NTFY_TOPIC` only if the owner wants NTFY delivery.
-3. Improve evidence-based profile dimensions and score breakdown without inferring uncertain CV fields.
+2. Enable the approved auto-email secrets only after the CV-less and language-specific behavior is merged and verified.
+3. Add `NTFY_TOPIC` only if the owner wants NTFY delivery.
+4. Improve evidence-based profile dimensions and score breakdown without inferring uncertain CV fields.
 
 See [`USER_ACTION_REQUIRED.md`](USER_ACTION_REQUIRED.md) for direct links and the required manual steps. No CV, secret, or token values are stored in this checkpoint.

@@ -21,6 +21,14 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       CAREERHUNTER_PROFILE_JSON: ${{ secrets.CAREERHUNTER_PROFILE_JSON }}
+      CAREERHUNTER_GMAIL_AUTO_OUTREACH_ENABLED: ${{ secrets.CAREERHUNTER_GMAIL_AUTO_OUTREACH_ENABLED }}
+      CAREERHUNTER_GMAIL_AUTO_TEMPLATE_APPROVED: ${{ secrets.CAREERHUNTER_GMAIL_AUTO_TEMPLATE_APPROVED }}
+      CAREERHUNTER_GMAIL_SEND_ENABLED: ${{ secrets.CAREERHUNTER_GMAIL_SEND_ENABLED }}
+      CAREERHUNTER_GMAIL_SEND_DATABASE_URL: ${{ secrets.CAREERHUNTER_GMAIL_SEND_DATABASE_URL }}
+      GMAIL_SEND_CLIENT_ID: ${{ secrets.GMAIL_SEND_CLIENT_ID }}
+      GMAIL_SEND_CLIENT_SECRET: ${{ secrets.GMAIL_SEND_CLIENT_SECRET }}
+      GMAIL_SEND_REFRESH_TOKEN: ${{ secrets.GMAIL_SEND_REFRESH_TOKEN }}
+      CAREERHUNTER_APPLICATION_REPLY_TO: ${{ secrets.CAREERHUNTER_APPLICATION_REPLY_TO }}
       NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
       TELEGRAM_DELIVERY_MODE: github
     steps:
@@ -43,6 +51,17 @@ jobs:
           if [ -z "${CAREERHUNTER_PROFILE_JSON:-}" ]; then
             echo "CAREERHUNTER_PROFILE_JSON GitHub Actions secret is required; refusing sample-profile scoring." >&2
             exit 1
+          fi
+          if [ "${CAREERHUNTER_GMAIL_AUTO_OUTREACH_ENABLED:-}" = "true" ]; then
+            if [ "${CAREERHUNTER_GMAIL_AUTO_TEMPLATE_APPROVED:-}" != "v2" ] || \
+               [ "${CAREERHUNTER_GMAIL_SEND_ENABLED:-}" != "true" ] || \
+               [ -z "${CAREERHUNTER_GMAIL_SEND_DATABASE_URL:-}" ] || \
+               [ -z "${GMAIL_SEND_CLIENT_ID:-}" ] || \
+               [ -z "${GMAIL_SEND_CLIENT_SECRET:-}" ] || \
+               [ -z "${GMAIL_SEND_REFRESH_TOKEN:-}" ]; then
+              echo "Automatic outreach is enabled but its approved template, PostgreSQL ledger, or Gmail OAuth configuration is incomplete." >&2
+              exit 1
+            fi
           fi
       - name: Install collector
         run: pip install -e .
