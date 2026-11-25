@@ -6,9 +6,13 @@ Güncelleme: 26 Kasım 2026 (Europe/Istanbul)
 
 1. **Brave dosya erişimini etkinleştir.** CV yüklemesi panelde oturum açtı, ancak Codex uzantısı yerel dosyayı seçemedi. Brave'de `brave://extensions` aç → ChatGPT/Codex uzantısında **Details** → **Allow access to file URLs** anahtarını aç. Codex paneline dönüp “hazır” yaz; PDF'ler zaten Downloads klasöründe, tekrar gönderme.
 
-2. **Render mail worker bağlantısını yeni Neon'a geçir.** Render [Environment](https://dashboard.render.com/web/srv-dbe3l1l9fdbs73975hog/env) sayfasındaki `CAREERHUNTER_GMAIL_SEND_DATABASE_URL` yeni Neon projesindeki `careerhunter_live` ve `careerhunter_mail_sender` rolünü kullanmalı. GitHub Actions worker sırrı bu hedefte ve worker testi başarılı. Neon Connect rol menüsünde `careerhunter_mail_sender` görünmedi; bu yüzden doğru bağlantı değerini oradan doğrulayamıyorum. Rol/parola değerini tahmin etme veya buraya gönderme; Neon rol bağlantısı erişilebilir olduğunda Render'a ekleyip deploy et.
+2. **NTFY bildirimini isteğe bağlı etkinleştir.** Bildirim isteniyorsa GitHub Actions deposuna `NTFY_TOPIC` sırrını kendi topic değerinle ekle. Değeri sohbet veya loglarda paylaşma.
 
-3. **NTFY topic'ini belirle (bildirim istiyorsan).** GitHub Actions deposunda `NTFY_TOPIC` sırrı yok. NTFY raporu isteniyorsa kendi topic değerini şu [GitHub Actions secrets](https://github.com/emirhankaya985-cloud/careerhunter-ai-ci/settings/secrets/actions) sayfasına kendin ekle; değeri sohbet veya loglarda paylaşma.
+
+## Tamamlananlar
+
+- Render `CAREERHUNTER_GMAIL_SEND_DATABASE_URL` yeni Neon mail rolüne geçirildi; deploy Live.
+- GitHub Gmail ön kontrolü ve boş Telegram mail worker başarıyla tamamlandı; gönderim kapalı, 0 mesaj gönderildi.
 
 ## Senden gerekmeyenler
 
