@@ -1,6 +1,6 @@
 # CareerHunter AI Checkpoint
 
-Last updated: 2026-11-25 (Europe/Istanbul; Render redeploy and CV readiness check)
+Last updated: 2026-11-25 (Europe/Istanbul; CV writer diagnosis)
 Repository: `emirhankaya985-cloud/careerhunter-ai-ci`
 Production code merge: PR #74, `637c83507dae3c9856f0d9c49af31e9a214fe6de`
 
@@ -9,7 +9,7 @@ Production code merge: PR #74, `637c83507dae3c9856f0d9c49af31e9a214fe6de`
 - User chose to abandon old database data and start fresh on the new Neon project.
 - GitHub is reported to be experiencing a service outage. Secret API attempts returned HTTP 500. Per user instruction, do not treat these as code defects or retry push/PR/CI operations during the outage.
 - The user updated Render environment settings and triggered a deployment. Render now reports the service Live on `637c83507dae3c9856f0d9c49af31e9a214fe6de`.
-- The GitHub Actions `DATABASE_URL` was not changed, so scheduled scans are not proven to target the new Neon database. No further Render settings were changed by Codex.
+- The GitHub Actions `DATABASE_URL` was not changed; scheduled scans are not proven to target the new Neon database. The latest secret update attempt failed before changing it. No further Render settings were changed by Codex.
 
 ## New Neon target prepared
 
@@ -18,7 +18,9 @@ Production code merge: PR #74, `637c83507dae3c9856f0d9c49af31e9a214fe6de`
 - Installed the fresh core schema: 11 tables; `schema_versions` reports version 4. No legacy records were copied; jobs table is empty.
 - Created `careerhunter_actions` with read/write privileges on the public schema. An insert/delete permission check on `runs` completed successfully within one transaction; no test row remains.
 - Render `/healthz`, `/readyz`, and `/versionz` return HTTP 200/`ok`/`ready`/`637c83507dae3c9856f0d9c49af31e9a214fe6de`. The dashboard panel shows zero jobs, zero people, and no recent run; the Neon database independently shows zero jobs and zero runs. These results are consistent with the fresh target, but `/readyz` does not reveal the connected project ID.
-- The CV management page reports “CV vault is not ready; check Render settings.” The exact cause was not revealed. The new Neon `careerhunter_live` does not have `careerhunter_cv_vault`; neither PDF was uploaded.
+- `CAREERHUNTER_DB_TARGET` on Render is `neon`. Render's selected `CAREERHUNTER_NEON_DATABASE_URL` points to the new US-region Neon host. `CAREERHUNTER_CRM_DATABASE_URL` points to a different EU-region Neon host, so the app's guarded CV writer rejects the mismatch.
+- Created `careerhunter_cv_vault` on the new database and a separate `careerhunter_cv_writer` role. Verified it has SELECT/INSERT on the CV table and no SELECT on `jobs`. Its password/URL was not displayed or stored in logs.
+- The CV page still reports “CV vault is not ready”; no CV was uploaded. The required manual repair is to set Render's `CAREERHUNTER_CRM_DATABASE_URL` to a connection URI for `careerhunter_cv_writer` on the new project. The Render CV key variable exists, but its validity was not disclosed or tested.
 - GitHub Actions is not proven to use the new database. No new scan has written to it. Mail-approval and Gmail-receipt supporting tables are not provisioned on this target.
 
 ## Existing verification
@@ -40,7 +42,7 @@ Production code merge: PR #74, `637c83507dae3c9856f0d9c49af31e9a214fe6de`
 
 1. After GitHub recovers, update Actions `DATABASE_URL` to the `careerhunter_actions` connection, then dispatch one scan and confirm Neon project ID `hidden-fog-42701810`, job inserts, and run receipt.
 2. Add a safe authenticated target-identity diagnostic; `/readyz` proves readability but not project ID. Confirm Render resolves to project `hidden-fog-42701810`.
-3. Fix the CV vault readiness cause, provision its least-privilege writer/table and encryption key, then upload/read back both CVs.
+3. In Render, set `CAREERHUNTER_CRM_DATABASE_URL` to a connection URI for role `careerhunter_cv_writer` on `careerhunter_live`; redeploy and confirm the CV page is ready. Then upload/read back both CVs.
 4. Verify Gmail OAuth identity, From, and Reply-To. Keep employer sends disabled; send only the owner test after explicit approval.
 5. Confirm scheduled workflows operate against the fresh target. Do not claim that legacy records were copied.
 
