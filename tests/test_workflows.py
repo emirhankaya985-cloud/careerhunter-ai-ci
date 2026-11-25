@@ -12,6 +12,11 @@ def test_daily_scheduler_runs_collector_directly_in_github_actions():
     assert "id-token: write" not in daily
     assert "contents: read" in daily
     assert "DATABASE_URL: ${{ secrets.DATABASE_URL }}" in daily
+    assert "CAREERHUNTER_GMAIL_AUTO_OUTREACH_ENABLED: ${{ secrets.CAREERHUNTER_GMAIL_AUTO_OUTREACH_ENABLED }}" in daily
+    assert "CAREERHUNTER_GMAIL_AUTO_TEMPLATE_APPROVED: ${{ secrets.CAREERHUNTER_GMAIL_AUTO_TEMPLATE_APPROVED }}" in daily
+    assert "CAREERHUNTER_GMAIL_SEND_ENABLED: ${{ secrets.CAREERHUNTER_GMAIL_SEND_ENABLED }}" in daily
+    assert "GMAIL_SEND_REFRESH_TOKEN: ${{ secrets.GMAIL_SEND_REFRESH_TOKEN }}" in daily
+    assert '"Automatic outreach is enabled but its approved template' in daily
     assert "python -m careerhunter run --slot jobs" in daily
     assert "render_scan_client.py" not in daily
     assert "git push" not in daily

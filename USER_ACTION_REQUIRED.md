@@ -4,7 +4,7 @@ Güncelleme: 26 Kasım 2026 (Europe/Istanbul)
 
 ## Gerekli kullanıcı işlemleri
 
-Şu anda zorunlu kullanıcı işlemi yok. CV yükleme iptal edildi; eklenti izinlerini açman gerekmiyor.
+CV yükleme iptal edildi; eklenti izinlerini açman gerekmiyor. CV'siz otomatik e-posta metni ve ülkeye göre dil davranışı onaylandı; uygulama ve üretim doğrulaması sürüyor.
 
 İsteğe bağlı: NTFY bildirimi istiyorsan GitHub Actions deposuna `NTFY_TOPIC` sırrını ekle. Değeri sohbet veya loglarda paylaşma.
 

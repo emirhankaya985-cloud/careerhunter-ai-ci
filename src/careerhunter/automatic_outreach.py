@@ -20,14 +20,21 @@ EMAIL_RE = re.compile(r"(?<![\w.+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}(?![\w-
 PERSONAL_EMAIL_DOMAINS = frozenset({"gmail.com", "yahoo.com", "outlook.com", "hotmail.com",
                                    "icloud.com", "proton.me", "protonmail.com"})
 APPLY_BY_EMAIL_RE = re.compile(
-    r"\b(?:email|e-mail)\s+(?:your\s+)?(?:cv|resume|application|curriculum vitae)\b"
-    r"|\b(?:send|submit|forward)\s+(?:your\s+)?(?:cv|resume|application|curriculum vitae)\b"
-    r"|\bapplications?\s+(?:accepted\s+)?(?:by|via)\s+(?:email|e-mail)\b"
+    r"\b(?:email|e-mail)\s+(?:your\s+)?application\b"
+    r"|\b(?:send|submit|forward)\s+(?:your\s+)?application\b"
+    r"|\bapplications?\s+(?:are\s+)?(?:accepted\s+)?(?:by|via)\s+(?:email|e-mail)\b"
     r"|\bapply\s+by\s+(?:email|e-mail)\b",
     re.I,
 )
+CV_REQUIRED_RE = re.compile(
+    r"\b(?:email|e-mail|send|submit|attach|include|forward)\b[^.!?\n]{0,100}"
+    r"\b(?:cv|resume|curriculum vitae)\b"
+    r"|\b(?:cv|resume|curriculum vitae)\b[^.!?\n]{0,100}"
+    r"\b(?:required|must be attached|please attach|include|email|e-mail)\b",
+    re.I,
+)
 MAX_SENDS_PER_RUN = 5
-TEMPLATE_VERSION = "v1"
+TEMPLATE_VERSION = "v2"
 
 
 def _application_address(job: Job) -> str | None:
@@ -40,7 +47,8 @@ def _application_address(job: Job) -> str | None:
         local, _, domain = address.rpartition("@")
         if (domain not in PERSONAL_EMAIL_DOMAINS
                 and not re.search(r"(?:no[-_.]?reply|do[-_.]?not[-_.]?reply|privacy|legal|support)", local)
-                and APPLY_BY_EMAIL_RE.search(context)):
+                and APPLY_BY_EMAIL_RE.search(context)
+                and not CV_REQUIRED_RE.search(context)):
             return address
     return None
 
@@ -58,7 +66,7 @@ def _contact_for(job: Job, address: str) -> Contact:
         primary_source_url=job.job_url,
         category="job_application_email",
         research_sources=[job.source_url, job.job_url],
-        verified_context="The ATS listing explicitly instructs applicants to email a CV/application.",
+        verified_context="The ATS listing explicitly accepts job applications by email.",
         evidence_text="ATS-listed email address adjacent to an explicit email-application instruction.",
         research_confidence="high",
         status="discovered",
@@ -92,10 +100,43 @@ def _eligible_job(job: Job, *, now: datetime) -> bool:
     return now - observed.astimezone(timezone.utc) <= timedelta(hours=24)
 
 
-def _language(job: Job) -> str:
-    text = f"{job.title} {job.location} {job.description}".casefold()
-    turkish_terms = ("başvuru", "çalışma", "şirket", "pozisyon", "ekibimize", "aramaktayız")
-    return "tr" if sum(term in text for term in turkish_terms) >= 2 else "en"
+def _language(job: Job) -> str | None:
+    """Choose a localized message from explicit location or clear ad language.
+
+    Never fall back to Turkish for an unknown or foreign location. Unsupported
+    or ambiguous language is skipped rather than sent in the wrong language.
+    """
+    location = f"{job.title} {job.location}".casefold()
+    if any(term in location for term in (
+        "türkiye", "turkey", "istanbul", "ankara", "izmir", "i̇zmir",
+    )):
+        return "tr"
+    if any(term in location for term in (
+        "germany", "deutschland", "berlin", "munich", "münchen", "hamburg",
+        "frankfurt", "köln", "cologne", "stuttgart",
+    )):
+        return "de"
+    if any(term in location for term in (
+        "united states", "usa", "u.s.", "united kingdom", "uk", "britain",
+        "england", "scotland", "wales", "australia",
+    )):
+        return "en"
+
+    text = f"{job.title} {job.description}".casefold()
+    signals = {
+        "tr": ("başvuru", "pozisyon", "işe alım", "şirket", "çalışma", "aramaktayız"),
+        "de": ("bewerbung", "stellenangebot", "unternehmen", "anforderungen",
+               "wir suchen", "lebenslauf"),
+        "en": ("application", "position", "requirements", "we are hiring",
+               "responsibilities", "apply by email"),
+    }
+    counts = {language: sum(term in text for term in terms)
+              for language, terms in signals.items()}
+    language, count = max(counts.items(), key=lambda item: item[1])
+    if count < 2 or list(counts.values()).count(count) > 1:
+        return None
+    # A Turkish ad is accepted only after the explicit Türkiye location check.
+    return None if language == "tr" else language
 
 
 def _message(profile: dict, job: Job, language: str) -> tuple[str, str]:
@@ -104,13 +145,20 @@ def _message(profile: dict, job: Job, language: str) -> tuple[str, str]:
     if language == "tr":
         subject = f"{job.title} başvurusu — {job.company}"
         body = (f"Merhaba İşe Alım Ekibi,\n\n{job.company} şirketindeki {job.title} "
-                "pozisyonuna başvuruyorum. İlgili rol için özgeçmişimi ekte iletiyorum. "
-                "Başvurumu değerlendirmeniz için teşekkür ederim.\n\nSaygılarımla,\n" + signoff)
-    else:
+                "rolüne başvuruyorum. Başvurumu değerlendirmeniz için teşekkür ederim."
+                "\n\nSaygılarımla,\n" + signoff)
+    elif language == "de":
+        subject = f"Bewerbung: {job.title} — {job.company}"
+        body = (f"Guten Tag,\n\nhiermit bewerbe ich mich für die Position {job.title} "
+                f"bei {job.company}. Vielen Dank für die Prüfung meiner Bewerbung."
+                "\n\nMit freundlichen Grüßen\n" + signoff)
+    elif language == "en":
         subject = f"Application: {job.title} — {job.company}"
         body = (f"Dear Hiring Team,\n\nI am applying for the {job.title} position at "
-                f"{job.company}. I have attached my CV for your consideration. "
-                "Thank you for reviewing my application.\n\nBest regards,\n" + signoff)
+                f"{job.company}. Thank you for considering my application."
+                "\n\nBest regards,\n" + signoff)
+    else:
+        raise ValueError("unsupported_application_language")
     return subject, body
 
 
@@ -131,7 +179,6 @@ def run_auto_outreach(repo, jobs: list[Job], *, dry_run: bool = False) -> dict[s
             os.getenv("CAREERHUNTER_GMAIL_SEND_DATABASE_URL", "").strip()
         ),
         "candidate_profile_available": False,
-        "approved_cv_available": False,
     }
     candidates: list[tuple[Job, Contact]] = []
     touched_jobs: list[Job] = []
@@ -195,14 +242,9 @@ def run_auto_outreach(repo, jobs: list[Job], *, dry_run: bool = False) -> dict[s
             continue
         seen_company.add(company_key)
         language = _language(job)
-        try:
-            from .cv_vault import load_cv_attachment
-            cv_bytes, cv_filename = load_cv_attachment(language)
-        except Exception:
-            result["status"] = "approved_cv_missing_or_unavailable"
-            result["skipped"] = len(candidates) - int(result["sent"])
-            return result
-        result["approved_cv_available"] = True
+        if language is None:
+            result["skipped"] = int(result["skipped"]) + 1
+            continue
         approval_id = hashlib.sha256(
             "\0".join((job.source, job.job_id, contact.person_id)).encode("utf-8")
         ).hexdigest()[:40]
@@ -212,7 +254,6 @@ def run_auto_outreach(repo, jobs: list[Job], *, dry_run: bool = False) -> dict[s
             contact_evidence_url=str(contact.primary_source_url),
             approval_id=approval_id, approved_by_owner=True,
             reply_to=os.getenv("CAREERHUNTER_APPLICATION_REPLY_TO", "").strip() or None,
-            attachment_pdf=cv_bytes, attachment_filename=cv_filename,
             company_key=company_key,
         )
         try:
@@ -232,7 +273,7 @@ def run_auto_outreach(repo, jobs: list[Job], *, dry_run: bool = False) -> dict[s
         )
         opportunity.status = "applied"
         opportunity.applied_at = utc_now()
-        opportunity.cv_sha256 = hashlib.sha256(cv_bytes).hexdigest()
+        # No CV is attached or claimed in this owner-approved CV-less flow.
         opportunity.submission_evidence_url = job.job_url
         opportunity.updated_at = utc_now()
         repo.upsert_opportunity(opportunity)
