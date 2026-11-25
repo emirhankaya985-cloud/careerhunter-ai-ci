@@ -6,7 +6,9 @@ from dataclasses import replace
 import httpx
 import pytest
 
-from careerhunter.gmail_send import ApprovedMail, GmailSendError, send_approved_once
+from careerhunter.gmail_send import (
+    ApprovedMail, GmailSendError, send_approved_once, send_owner_self_test_once,
+)
 
 BASE = ApprovedMail(
     recipient="jobs@example.org",
@@ -31,9 +33,9 @@ def test_unapproved_or_unverified_mail_never_sends(tmp_path, monkeypatch):
     for mail in (
         replace(BASE, approved_by_owner=False),
         replace(BASE, recipient="no-address"),
-        replace(BASE, reply_to="bad\nBcc: intruder@example.org"),
+        replace(BASE, reply_to="bad\r\nBcc: intruder@example.org"),
         replace(BASE, contact_evidence_url="http://example.org/unverified"),
-        replace(BASE, subject="Hi\nBcc: intruder@example.org"),
+        replace(BASE, subject="Hi\r\nBcc: intruder@example.org"),
     ):
         with pytest.raises(GmailSendError):
             send_approved_once(mail, database_url=db, allow_sqlite_tests=True)
@@ -145,7 +147,7 @@ def test_application_mail_attaches_only_valid_pdf_and_stores_gmail_id_and_compan
     from careerhunter.gmail_send import mail_receipts
 
     credentials(monkeypatch)
-    attachment = b"%PDF-1.7\nverified-cv\n%%EOF"
+    attachment = b"%PDF-1.7\r\nverified-cv\r\n%%EOF"
     mail = replace(BASE, approval_id="application-001", attachment_pdf=attachment,
                    attachment_filename="careerhunter_cv_en.pdf", company_key="a" * 64)
     captured = []
@@ -204,4 +206,104 @@ def test_existing_oauth_client_can_be_reused_but_readonly_token_cannot(
             client=client, allow_sqlite_tests=True,
         ) == "providerMessage123"
     assert len(seen) == 1
+
+
+def test_owner_self_test_is_fixed_recipient_verified_and_deduplicated(tmp_path, monkeypatch):
+    credentials(monkeypatch)
+    monkeypatch.setenv("CAREERHUNTER_GMAIL_SELF_TEST_ENABLED", "true")
+    monkeypatch.setenv("CAREERHUNTER_GMAIL_SELF_TEST_ACCOUNT", "owner@example.org")
+    monkeypatch.setenv("CAREERHUNTER_GMAIL_SEND_ENABLED", "false")
+    sent = []
+
+    def transport(request):
+        if request.url.host == "oauth2.googleapis.com":
+            return httpx.Response(200, json={"access_token": "fake-test-token"})
+        if request.url.host == "openidconnect.googleapis.com":
+            assert request.headers["Authorization"] == "Bearer fake-test-token"
+            return httpx.Response(200, json={"email": "OWNER@example.org",
+                                             "email_verified": True})
+        assert request.url.path.endswith("/messages/send")
+        raw = base64.urlsafe_b64decode(
+            json.loads(request.content)["raw"] + "=" * (-len(json.loads(request.content)["raw"]) % 4)
+        )
+        assert b"To: owner@example.org" in raw
+        assert b"jobs@example.org" not in raw
+        assert b'filename="careerhunter_cv_en.pdf"' in raw
+        sent.append(raw)
+        return httpx.Response(200, json={"id": "ownerTestMessage123"})
+
+    db = "sqlite:///" + str(tmp_path / "self-test.db")
+    attachment = b"%PDF-1.7\r\nowner-test\r\n%%EOF"
+    with httpx.Client(transport=httpx.MockTransport(transport)) as client:
+        assert send_owner_self_test_once("en", attachment, database_url=db,
+                                         client=client, allow_sqlite_tests=True) == "ownerTestMessage123"
+        with pytest.raises(GmailSendError, match="duplicate_or_previous_attempt"):
+            send_owner_self_test_once("en", attachment, database_url=db,
+                                      client=client, allow_sqlite_tests=True)
+    assert len(sent) == 1
+    from sqlalchemy import create_engine, select
+    from careerhunter.gmail_send import mail_receipts
+    engine = create_engine(db)
+    try:
+        with engine.connect() as connection:
+            receipt = connection.execute(select(mail_receipts)).mappings().one()
+        assert receipt["status"] == "sent_self_test"
+        assert receipt["provider_message_id"] == "ownerTestMessage123"
+    finally:
+        engine.dispose()
+
+
+def test_owner_self_test_rejects_wrong_or_unverified_oauth_identity(tmp_path, monkeypatch):
+    from sqlalchemy import create_engine, select
+    from careerhunter.gmail_send import mail_receipts
+
+    credentials(monkeypatch)
+    monkeypatch.setenv("CAREERHUNTER_GMAIL_SELF_TEST_ENABLED", "true")
+    monkeypatch.setenv("CAREERHUNTER_GMAIL_SELF_TEST_ACCOUNT", "owner@example.org")
+    sends = []
+
+    def transport(request):
+        if request.url.host == "oauth2.googleapis.com":
+            return httpx.Response(200, json={"access_token": "fake-test-token"})
+        if request.url.host == "openidconnect.googleapis.com":
+            return httpx.Response(200, json={"email": "other@example.org",
+                                             "email_verified": True})
+        sends.append(True)
+        return httpx.Response(200, json={"id": "shouldNeverSend123"})
+
+    db = "sqlite:///" + str(tmp_path / "wrong-identity.db")
+    with httpx.Client(transport=httpx.MockTransport(transport)) as client:
+        with pytest.raises(GmailSendError, match="gmail_sender_account_mismatch"):
+            send_owner_self_test_once("tr", b"%PDF-1.7\r\ncv\r\n%%EOF", database_url=db,
+                                      client=client, allow_sqlite_tests=True)
+        with pytest.raises(GmailSendError, match="duplicate_or_previous_attempt"):
+            send_owner_self_test_once("tr", b"%PDF-1.7\r\ncv\r\n%%EOF", database_url=db,
+                                      client=client, allow_sqlite_tests=True)
+    engine = create_engine(db)
+    try:
+        with engine.connect() as connection:
+            row = connection.execute(select(mail_receipts)).mappings().one()
+        assert row["status"] == "pending_review"
+    finally:
+        engine.dispose()
+    assert sends == []
+
+
+def test_owner_self_test_requires_its_own_gate_and_valid_attachment(tmp_path, monkeypatch):
+    credentials(monkeypatch)
+    monkeypatch.setenv("CAREERHUNTER_GMAIL_SELF_TEST_ACCOUNT", "owner@example.org")
+    monkeypatch.delenv("CAREERHUNTER_GMAIL_SELF_TEST_ENABLED", raising=False)
+    with pytest.raises(GmailSendError, match="gmail_self_test_disabled"):
+        send_owner_self_test_once("en", b"%PDF-1.7\r\ncv\r\n%%EOF",
+                                  database_url="sqlite:///" + str(tmp_path / "off.db"),
+                                  allow_sqlite_tests=True)
+    monkeypatch.setenv("CAREERHUNTER_GMAIL_SELF_TEST_ENABLED", "true")
+    with pytest.raises(GmailSendError, match="invalid_cv_attachment"):
+        send_owner_self_test_once("en", b"not a PDF",
+                                  database_url="sqlite:///" + str(tmp_path / "bad-pdf.db"),
+                                  allow_sqlite_tests=True)
+    with pytest.raises(GmailSendError, match="invalid_self_test_language"):
+        send_owner_self_test_once("fr", b"%PDF-1.7\r\ncv\r\n%%EOF",
+                                  database_url="sqlite:///" + str(tmp_path / "bad-lang.db"),
+                                  allow_sqlite_tests=True)
 

@@ -1,34 +1,38 @@
 # CareerHunter AI Checkpoint
 
-Last checked: 2026-11-25 (Europe/Istanbul)
+Last checked: 2026-11-25 (Europe/Istanbul; Task 6.4)
 Repository: `emirhankaya985-cloud/careerhunter-ai-ci`
-Branch: `main` (see GitHub for current documentation checkpoint SHA); application commit: `3759cc43cbfb8353dbfc9bca4e1e21cddcd1dea7`
+PR: #74, branch `task-6-3`; application currently running on Render: `3759cc43cbfb8353dbfc9bca4e1e21cddcd1dea7`.
 
 ## Verified
-- Main contains a documentation-only checkpoint commit (`3d358aaf`); application source remains at `3759cc43`.
-- Latest Render `/healthz` and `/readyz` returned HTTP 200; `/versionz` returned `3759cc43`. It is expected to differ from the documentation-only main commit; no app code changed.
-- GitHub `Hourly Career Intelligence` scheduled runs #45493357820 (2026-11-24 21:39 UTC) and #45548241184 (2026-11-25 04:39 UTC) succeeded with event=`schedule`; scan workflow does not depend on Render.
-- Scheduled Telegram HR email approval worker #45585129497 completed successfully. Telegram report workflow #45548646268 completed successfully.
-- Existing code CI run #45380854892 succeeded on the app commit. No code changes were made in this continuation; no new tests were run for documentation-only updates.
-- GitHub Actions secret names currently include `DATABASE_URL`, `CAREERHUNTER_PROFILE_JSON`, `CAREERHUNTER_GMAIL_SEND_DATABASE_URL`, Telegram token/chat ID. No Gmail send OAuth secrets (`GMAIL_SEND_CLIENT_ID`, `GMAIL_SEND_CLIENT_SECRET`, `GMAIL_SEND_REFRESH_TOKEN`) are present.
-- Gmail preflight #45463259099 reported blocked: send disabled, OAuth scope unverified, zero approved contacts, no messages sent.\n- Current Gmail connector profile did not match the previously identified sender account; no worker test was sent to avoid sending a CV to the wrong mailbox. No dedicated self-recipient worker test path exists in current code.
-- Files `Emirhan_Kaya_CV_EN.pdf` (715894 bytes; SHA-256 `EAF05155147FEFAB4E6F984690917D0E2BFE5A2625BCD32D8B405F1DAD3D36C6`) and `Emirhan_Kaya_CV (1).pdf` (717586 bytes; SHA-256 `EA34F21B18C92F876191F41C90056AD61C844CC6F82A13C94949EBD8467AC585`) are present in local Downloads. Do not put CVs or their contents in this public repository.
-- Latest successful direct Neon read (2026-11-24): 5,454 jobs; source/job-key duplicates 0; duplicate URLs 0; CV vault 0; approvals 0; mail receipts 0; applied opportunities 0. A fresh read on 2026-11-25 failed because the current Neon connector returned `project not found`; updated database counts are therefore unverified.
-- No employer applications were sent. Previous self-email #1a20ec741f4c778e was sent outside the CareerHunter worker and is not worker evidence.
-- Old suspended Render Postgres recovery remains unverified; do not upgrade or delete it.
 
-## Changes in checkpoint
-- Added/updated this file only. No production data or secrets were changed.
+- New Neon project `hidden-fog-42701810` (`careerhunter-ai-free`, organization `org-icy-cake-74628211`) was created 2026-11-25. Default branch: `br-autumn-cell-bb1fk9d1`; PostgreSQL 18.7. It contains only database `neondb`; table inventory is empty, and `careerhunter_live` does not exist. It is not a usable CareerHunter target yet.
+- Previous project `quiet-art-74335461` and branch `br-young-sky-b9whr2a6` did not appear in Neon search or the connected organization's recoverable-project list. No export/backup is available through the Neon connector. The historical 5,454-job count has not been transferred or remeasured.
+- GitHub Actions no-send Gmail preflight #45640117261 succeeded. `gmail.send` scope verified; current mail writer connects to `careerhunter_live` as `careerhunter_mail_sender`, with approval table present. Send gate false, approved recipients 0, automatic dispatch/template approval false, messages sent 0. This confirms the old connection is reachable, but not which Neon project it targets or the Gmail token's account identity.
+- GitHub Actions has the user-listed OAuth and self-test secret names. Values were not read. The database URL secrets were last updated 2026-11-24, so their target cannot be inferred. `CAREERHUNTER_CV_VAULT_KEY` and `CAREERHUNTER_APPLICATION_REPLY_TO` are absent.
+- Local CV files were verified on 2026-11-25: EN 715,894 bytes, SHA-256 `EAF05155147FEFAB4E6F984690917D0E2BFE5A2625BCD32D8B405F1DAD3D36C6`; TR 717,586 bytes, SHA-256 `EA34F21B18C92F876191F41C90056AD61C844CC6F82A13C94949EBD8467AC585`. Both are one-page, unencrypted PDFs with extractable text and matching language labels. They have not been uploaded.
+- Hourly collector's latest observed successful scheduled run: #45548241184 (2026-11-25 04:39 UTC). Telegram approval worker: #45585129497 (2026-11-25 09:24 UTC). Both workflows are active, but no newer scheduled runs appeared in the history checked at 14:59 UTC.
+- Render read-only check reported `/healthz` 200, `/readyz` 200, `/versionz` `3759cc43`. No database URLs or Render settings were changed.
+- PR #74 remains open. Tests and PostgreSQL integration checks passed on `c053d66`; local full suite: 499 passed, 2 skipped; final Gmail self-test suite: 13 passed; Ruff passed. No Gmail messages or employer applications were sent.
 
-## Pending / action required
-1. Owner must sign in to the CareerHunter panel and upload EN and TR PDFs through the owner-only form. Current live vault count remains last measured at 0; browser authentication and CSRF must not be bypassed.
-2. Confirm which Gmail account is the intended sender; the connected account did not match the prior sender identity. Complete Gmail send OAuth through Google's official flow and securely add the code-required `GMAIL_SEND_CLIENT_ID`, `GMAIL_SEND_CLIENT_SECRET`, and `GMAIL_SEND_REFRESH_TOKEN` values through GitHub Secrets. Do not paste secrets in chat.
-3. There are zero approved employer contacts and no enabled template/automation approval. Keep employer dispatch off until these are explicitly established.
-4. Worker-originated self-test email with PDF, Gmail message ID, Neon receipt, inbox confirmation, and Telegram confirmation remains unverified. Add or authorize a strictly self-recipient test path after the intended Gmail account is confirmed; do not turn on employer dispatch just to test.
-5. Fresh Neon counts and table health await restored/authorized Neon connector access.
-6. No real job applications have been sent.
+## Task 6.3 code
 
-## Next continuation
-After owner login, upload both local PDFs via the existing owner form and verify encrypted readback and language selection. Configure Gmail OAuth securely; keep employer dispatch disabled until recipient and template scope are approved. Then use a dedicated self-recipient worker test and verify the message, attachment, Neon receipt, and notification. Recheck Neon data when authorized connector access is restored.
+- Added an owner-only manual Gmail test that fixes the recipient to a protected secret, verifies OAuth `email_verified` identity before sending, attaches only the selected vault CV, and records a one-shot `sent_self_test` receipt.
+- Added least-privilege mail-receipt schema migration; the worker checks schema and does no runtime PostgreSQL DDL.
+- Test workflow requires owner actor, main branch, explicit dispatch confirmation, selected language, CV key, Gmail OAuth and database secrets. Employer dispatch remains disabled.
+- Task 6.4 review found the migration's unconditional grant failed if `careerhunter_mail_sender` did not exist. The branch now conditionally grants only when the role exists; rerunning after role provisioning applies the grants. This updated patch still needs CI.
 
+## Pending
 
+1. Lossless transfer: source project and full export are not visible in Neon connector. Existing GitHub secrets reach a database named `careerhunter_live`, but the source project identity and full table/key inventory have not been verified. Do not switch production URLs to the empty project.
+2. Prepare a verified `careerhunter_live` database and least-privilege application/mail roles in the new project, then transfer and compare every table/row/key before any cutover.
+3. After cutover, apply migrations and verify application read/write. The receipt migration is not applied to any production database.
+4. Upload EN/TR CVs after the correct vault exists. Vault key is not in GitHub Actions; adding it would allow the gated workflow to decrypt CVs and needs explicit approval.
+5. No-send preflight proves the token has `gmail.send` scope, not that GitHub's refresh token belongs to the intended sender. Owner-only test will verify identity before sending, but needs a populated vault and correct target DB.
+6. `CAREERHUNTER_APPLICATION_REPLY_TO` is absent. Employer dispatch/template gates remain off and there are zero approved employer recipients.
+7. Resolve Google's OAuth Testing-mode refresh token expiry compliantly (publish/verify External app, or use Internal only if eligible); do not work around the limit by repeatedly rotating tokens.
+8. The last observed scheduled scan/Telegram runs are several hours old, despite workflows being active. Recheck natural schedules after database target is verified.
+
+## Next steps
+
+Review and merge PR #74 only after the corrected migration CI passes and schema/cutover risk is understood. Use the currently reachable source connection to perform a read-only full inventory and verified export; restore into the new project only after its `careerhunter_live` database and roles are prepared. Compare table counts, keys, and data before switching GitHub or Render URLs. Then upload the two verified CVs, confirm OAuth identity with a no-send check, run one owner-only CV test, and verify Gmail receipt plus Telegram notification. Keep employer dispatch off until recipient, template, and limits are approved.
