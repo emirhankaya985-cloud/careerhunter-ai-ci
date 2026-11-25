@@ -4,7 +4,7 @@ Güncelleme: 26 Kasım 2026 (Europe/Istanbul)
 
 ## Gerekli kullanıcı işlemleri
 
-CV yükleme iptal edildi; eklenti izinlerini açman gerekmiyor. CV'siz otomatik e-posta metni ve ülkeye göre dil davranışı onaylandı; uygulama ve üretim doğrulaması sürüyor.
+CV yükleme iptal edildi; eklenti izinlerini açman gerekmiyor. CV'siz otomatik e-posta ve dil kuralları onaylandı, CI sonrası GitHub Actions'ta etkinleştirildi. Şu an doğrulanmış işveren e-posta adresi bulunmadığı için mesaj gönderilmedi.
 
 İsteğe bağlı: NTFY bildirimi istiyorsan GitHub Actions deposuna `NTFY_TOPIC` sırrını ekle. Değeri sohbet veya loglarda paylaşma.
 
@@ -12,7 +12,7 @@ CV yükleme iptal edildi; eklenti izinlerini açman gerekmiyor. CV'siz otomatik 
 ## Tamamlananlar
 
 - Render `CAREERHUNTER_GMAIL_SEND_DATABASE_URL` yeni Neon mail rolüne geçirildi; deploy Live.
-- GitHub Gmail ön kontrolü ve boş Telegram mail worker başarıyla tamamlandı; gönderim kapalı, 0 mesaj gönderildi.
+- GitHub Gmail ön kontrolü başarıyla tamamlandı; otomatik gönderim yalnızca onaylı kurallar ve kayıtlı alıcı sınırlarıyla açık.
 
 ## Senden gerekmeyenler
 
