@@ -6,6 +6,7 @@ import os
 import httpx
 from sqlalchemy import create_engine, select, text
 from fastapi import APIRouter, Request
+from .automatic_outreach import TEMPLATE_VERSION
 
 router = APIRouter()
 SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
@@ -113,7 +114,9 @@ def build_preflight() -> dict[str, object]:
                            or os.getenv("DATABASE_URL", "")).strip())
     writer_identity = _writer_identity()
     scope_verified = _check_send_scope()
-    template_approved = os.getenv("CAREERHUNTER_GMAIL_AUTO_TEMPLATE_APPROVED") == "v1"
+    template_approved = (
+        os.getenv("CAREERHUNTER_GMAIL_AUTO_TEMPLATE_APPROVED") == TEMPLATE_VERSION
+    )
     automatic_enabled = (
         os.getenv("CAREERHUNTER_GMAIL_AUTO_OUTREACH_ENABLED") == "true"
         and template_approved

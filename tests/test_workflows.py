@@ -33,6 +33,14 @@ def test_daily_workflows_have_one_expected_collector_schedule():
     assert schedules == {"daily.yml": ["- cron: '0 * * * *'"]}
 
 
+def test_gmail_preflight_tracks_the_current_outreach_template_version():
+    preflight = (ROOT / "src/careerhunter/gmail_send_preflight.py").read_text(
+        encoding="utf-8"
+    )
+    assert "from .automatic_outreach import TEMPLATE_VERSION" in preflight
+    assert '== TEMPLATE_VERSION' in preflight
+
+
 def test_legacy_workflows_are_manual_only_without_collector_secrets():
     weekly = (ROOT / ".github/workflows/weekly.yml").read_text(encoding="utf-8")
     four = (ROOT / ".github/workflows/four-country-verification.yml").read_text(
