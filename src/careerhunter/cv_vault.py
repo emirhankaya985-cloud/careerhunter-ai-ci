@@ -34,6 +34,16 @@ vault = Table(
     Column("size_bytes", String(20), nullable=False),
     Column("updated_at", String(40), nullable=False),
 )
+# Archive encrypted originals; a keyed digest prevents duplicate storage.
+history = Table(
+    "careerhunter_cv_history", metadata,
+    Column("language", String(2), primary_key=True),
+    Column("integrity_mac", String(64), primary_key=True),
+    Column("nonce", LargeBinary(12), nullable=False),
+    Column("ciphertext", LargeBinary, nullable=False),
+    Column("size_bytes", String(20), nullable=False),
+    Column("updated_at", String(40), nullable=False),
+)
 LANGUAGES = frozenset({"tr", "en"})
 MAX_CV_BYTES = 10 * 1024 * 1024
 PREFLIGHT_WORKFLOW = (
@@ -80,7 +90,7 @@ def _engine():
         raise HTTPException(503, "CV vault requires PostgreSQL")
     engine = create_engine(url, pool_pre_ping=True, pool_size=1, max_overflow=0)
     try:
-        metadata.create_all(engine, tables=[vault])
+        metadata.create_all(engine, tables=[vault, history])
     except Exception:
         engine.dispose()
         raise HTTPException(503, "CV vault storage is unavailable") from None
@@ -207,6 +217,8 @@ def cv_vault_manage(request: Request) -> Response:
     if message == "stored":
         language = request.query_params.get("language", "")
         status = f"{html.escape(language.upper())} CV şifreli kasaya yüklendi."
+    if message == "duplicate":
+        status = "Bu CV zaten kasada. Güncel sürüm değiştirilmedi."
     sections = []
     for language, label in (("en", "İngilizce CV"), ("tr", "Türkçe CV")):
         uploaded = (f"Yüklü • {html.escape(stored[language])}" if language in stored
@@ -255,7 +267,9 @@ async def cv_vault_manage_upload(language: str, request: Request) -> RedirectRes
     plain = await upload.read(MAX_CV_BYTES + 1)
     if len(plain) > MAX_CV_BYTES:
         raise HTTPException(413, "CV exceeds 10 MiB")
-    _store_cv(language, plain)
+    result = _store_cv(language, plain)
+    if result["status"] == "duplicate":
+        return RedirectResponse("/internal/owner/cv/manage?status=duplicate", status_code=303)
     return RedirectResponse(
         f"/internal/owner/cv/manage?status=stored&language={language}", status_code=303
     )
@@ -295,6 +309,20 @@ def _store_cv(language: str, plain: bytes) -> dict[str, object]:
     engine = _engine()
     try:
         with engine.begin() as conn:
+            _lock_language(conn, language)
+            current = conn.execute(select(vault).where(
+                vault.c.language == language)).mappings().first()
+            if current:
+                _verify_record(current, key, language)
+                _archive(conn, dict(current))
+            existing = conn.execute(select(history).where(
+                history.c.language == language,
+                history.c.integrity_mac == record["integrity_mac"])).mappings().first()
+            if existing:
+                _verify_record(existing, key, language)
+                return {"status": "duplicate", "language": language,
+                        "size_bytes": len(plain), "encrypted_at_rest": True}
+            _archive(conn, record)
             statement = (pg_insert(vault) if engine.dialect.name == "postgresql"
                          else sqlite_insert(vault)).values(**record)
             conn.execute(statement.on_conflict_do_update(
@@ -306,6 +334,33 @@ def _store_cv(language: str, plain: bytes) -> dict[str, object]:
         engine.dispose()
     return {"status": "stored", "language": language,
             "size_bytes": len(plain), "encrypted_at_rest": True}
+
+
+def _lock_language(conn, language: str) -> None:
+    if conn.dialect.name == "postgresql":
+        conn.execute(text("SELECT pg_advisory_xact_lock(:key)"),
+                     {"key": 7391001 if language == "tr" else 7391002})
+
+
+def _archive(conn, record: dict) -> None:
+    insert = pg_insert if conn.dialect.name == "postgresql" else sqlite_insert
+    conn.execute(insert(history).values(**record).on_conflict_do_nothing(
+        index_elements=[history.c.language, history.c.integrity_mac]))
+
+
+def _verify_record(row, key: bytes, language: str) -> bytes:
+    try:
+        plain = AESGCM(key).decrypt(
+            row["nonce"], row["ciphertext"],
+            f"careerhunter-cv-vault:v1:{language}".encode(),
+        )
+    except InvalidTag:
+        raise HTTPException(503, "CV vault integrity unavailable") from None
+    if not hmac.compare_digest(
+        hmac.new(key, plain, hashlib.sha256).hexdigest(), row["integrity_mac"]
+    ):
+        raise HTTPException(503, "CV vault integrity unavailable")
+    return plain
 
 
 @router.get("/internal/owner/cv/{language}")
@@ -358,7 +413,9 @@ def delete_cv(language: str, request: Request) -> dict[str, str]:
     try:
         from sqlalchemy import delete
         with engine.begin() as conn:
+            _lock_language(conn, language)
             conn.execute(delete(vault).where(vault.c.language == language))
+            conn.execute(delete(history).where(history.c.language == language))
     finally:
         engine.dispose()
     return {"status": "deleted", "language": language}
