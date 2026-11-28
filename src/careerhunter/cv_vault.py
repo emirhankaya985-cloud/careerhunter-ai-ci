@@ -111,6 +111,7 @@ def cv_vault_preflight(request: Request) -> dict[str, object]:
     writer_matches = False
     writer_database = "other"
     vault_table_exists = False
+    history_table_exists = False
     writer_reachable = False
     encryption_key_configured = False
     try:
@@ -137,20 +138,23 @@ def cv_vault_preflight(request: Request) -> dict[str, object]:
                 with engine.connect() as connection:
                     connection.execute(text("SELECT 1"))
                     writer_reachable = True
-                    vault_table_exists = inspect(connection).has_table(vault.name)
+                    inspector = inspect(connection)
+                    vault_table_exists = inspector.has_table(vault.name)
+                    history_table_exists = inspector.has_table(history.name)
             finally:
                 engine.dispose()
     except Exception:
         # Deliberately return only fixed readiness fields, never driver errors.
         pass
     ready = (writer_matches and writer_reachable and vault_table_exists
-             and encryption_key_configured)
+             and history_table_exists and encryption_key_configured)
     return {
         "status": "ready" if ready else "blocked",
         "writer_database": writer_database,
         "writer_matches_selected_neon": writer_matches,
         "writer_reachable": writer_reachable,
         "vault_table_exists": vault_table_exists,
+        "history_table_exists": history_table_exists,
         "encryption_key_configured": encryption_key_configured,
         "cv_upload_performed": False,
     }

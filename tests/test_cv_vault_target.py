@@ -63,7 +63,15 @@ def test_writer_fails_closed_when_selected_target_is_missing(monkeypatch):
     assert "secret" not in error.value.detail
 
 
-def test_oidc_preflight_reports_safe_target_facts_without_upload(monkeypatch):
+@pytest.mark.parametrize(
+    ("existing_tables", "expected_status"),
+    [
+        ({"careerhunter_cv_vault", "careerhunter_cv_history"}, "ready"),
+        ({"careerhunter_cv_vault"}, "blocked"),
+    ],
+)
+def test_oidc_preflight_reports_safe_target_facts_without_upload(
+        monkeypatch, existing_tables, expected_status):
     class Connection:
         def __enter__(self):
             return self
@@ -83,8 +91,7 @@ def test_oidc_preflight_reports_safe_target_facts_without_upload(monkeypatch):
 
     class Inspector:
         def has_table(self, name):
-            assert name == "careerhunter_cv_vault"
-            return True
+            return name in existing_tables
 
     monkeypatch.setattr(
         "careerhunter.scheduled_scan._require_github_oidc", lambda *args, **kwargs: None
@@ -100,11 +107,12 @@ def test_oidc_preflight_reports_safe_target_facts_without_upload(monkeypatch):
     result = cv_vault.cv_vault_preflight(object())
 
     assert result == {
-        "status": "ready",
+        "status": expected_status,
         "writer_database": "careerhunter_live",
         "writer_matches_selected_neon": True,
         "writer_reachable": True,
         "vault_table_exists": True,
+        "history_table_exists": "careerhunter_cv_history" in existing_tables,
         "encryption_key_configured": True,
         "cv_upload_performed": False,
     }
